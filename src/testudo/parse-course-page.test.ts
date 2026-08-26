@@ -48,6 +48,22 @@ const sectionHtml = `
         <span class="open-seats-count">4</span>
         <span class="waitlist-count">3</span>
         <span class="holdfile-count">7</span>
+        <div class="class-days-container">
+          <div class="row">
+            <span class="section-days">MWF</span>
+            <span class="class-start-time">10:00am</span>
+            <span class="class-end-time">10:50am</span>
+            <span class="building-code">IRB</span>
+            <span class="class-room">0324</span>
+          </div>
+          <div class="row">
+            <span class="section-days">TuTh</span>
+            <span class="class-start-time">12:00pm</span>
+            <span class="class-end-time">1:15pm</span>
+            <span class="class-type">Discussion</span>
+          </div>
+          <div class="row"><span class="layout-only">Spacer</span></div>
+        </div>
         <div class="section-texts-container">
           <div class="section-text">
             Restricted to students in Freshmen Connection.
@@ -159,7 +175,26 @@ describe("parseCoursePage sections", () => {
         "Bring your own laptop & charger.",
       ],
       seats: { total: 32, open: 4, waitlist: 3, holdFile: 7 },
-      meetings: [],
+      meetings: [
+        {
+          days: ["M", "W", "F"],
+          startMinutes: 600,
+          endMinutes: 650,
+          displayTime: "10:00am - 10:50am",
+          building: "IRB",
+          room: "0324",
+          type: null,
+        },
+        {
+          days: ["Tu", "Th"],
+          startMinutes: 720,
+          endMinutes: 795,
+          displayTime: "12:00pm - 1:15pm",
+          building: null,
+          room: null,
+          type: "Discussion",
+        },
+      ],
     });
     expect(result.warnings).toEqual([]);
   });
@@ -235,5 +270,111 @@ describe("parseCoursePage sections", () => {
       sectionNumber: null,
       sectionIndex: 0,
     });
+  });
+});
+
+describe("parseCoursePage meetings", () => {
+  it("normalizes meeting days, times, locations, and types", () => {
+    const meetings = parseCoursePage({
+      html: sectionHtml,
+      semester: "202608",
+    }).course.sections[0]?.meetings;
+
+    expect(meetings).toEqual([
+      {
+        days: ["M", "W", "F"],
+        startMinutes: 600,
+        endMinutes: 650,
+        displayTime: "10:00am - 10:50am",
+        building: "IRB",
+        room: "0324",
+        type: null,
+      },
+      {
+        days: ["Tu", "Th"],
+        startMinutes: 720,
+        endMinutes: 795,
+        displayTime: "12:00pm - 1:15pm",
+        building: null,
+        room: null,
+        type: "Discussion",
+      },
+    ]);
+  });
+
+  it.each([
+    ["12:00am", 0],
+    ["12:00pm", 720],
+    ["1:05pm", 785],
+  ])("normalizes the %s boundary", (displayed, minutes) => {
+    const html = sectionHtml
+      .replace("10:00am", displayed)
+      .replace("10:50am", displayed);
+    const meeting = parseCoursePage({ html, semester: "202608" }).course
+      .sections[0]?.meetings[0];
+
+    expect(meeting?.startMinutes).toBe(minutes);
+    expect(meeting?.endMinutes).toBe(minutes);
+  });
+
+  it("normalizes weekend day codes", () => {
+    const html = sectionHtml.replace("MWF", "SaSu");
+    const meeting = parseCoursePage({ html, semester: "202608" }).course
+      .sections[0]?.meetings[0];
+
+    expect(meeting?.days).toEqual(["Sa", "Su"]);
+  });
+
+  it("keeps an explicitly unscheduled meeting nullable", () => {
+    const html = sectionHtml.replace(
+      /<span class="section-days">MWF<\/span>[\s\S]*?<span class="class-end-time">10:50am<\/span>/,
+      '<span class="section-days">TBA</span>',
+    );
+    const meeting = parseCoursePage({ html, semester: "202608" }).course
+      .sections[0]?.meetings[0];
+
+    expect(meeting).toMatchObject({
+      days: [],
+      startMinutes: null,
+      endMinutes: null,
+      displayTime: null,
+    });
+  });
+
+  it.each([
+    ["MX", "meeting.days"],
+    ["25:00pm", "meeting.time"],
+  ])("skips only a malformed meeting containing %s", (value, field) => {
+    const html = sectionHtml.replace(
+      value === "MX" ? "MWF" : "10:00am",
+      value,
+    );
+    const result = parseCoursePage({ html, semester: "202608" });
+
+    expect(result.course.sections[0]?.meetings).toHaveLength(1);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({
+        code: "MEETING_SKIPPED",
+        field,
+        sectionNumber: "FC01",
+        sectionIndex: 0,
+      }),
+    );
+  });
+
+  it("skips a meeting with only one time boundary", () => {
+    const html = sectionHtml.replace(
+      '<span class="class-end-time">10:50am</span>',
+      "",
+    );
+    const result = parseCoursePage({ html, semester: "202608" });
+
+    expect(result.course.sections[0]?.meetings).toHaveLength(1);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({
+        code: "MEETING_SKIPPED",
+        field: "meeting.time",
+      }),
+    );
   });
 });

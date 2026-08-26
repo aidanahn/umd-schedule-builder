@@ -190,10 +190,80 @@ function parseDeliveryMode(
   return "unknown";
 }
 
+const DAY_CODES: DayCode[] = ["Tu", "Th", "Sa", "Su", "M", "W", "F"];
+
+function parseDays(value: string): DayCode[] {
+  const normalized = cleanText(value);
+  if (!normalized || /^(?:TBA|ARR)$/i.test(normalized)) {
+    return [];
+  }
+
+  const days: DayCode[] = [];
+  let remaining = normalized;
+
+  while (remaining) {
+    const day = DAY_CODES.find((candidate) => remaining.startsWith(candidate));
+    if (!day) {
+      throw new RecordParseError("meeting.days", "meeting days are invalid");
+    }
+
+    days.push(day);
+    remaining = remaining.slice(day.length);
+  }
+
+  return days;
+}
+
+function parseTime(value: string): number {
+  const match = /^(\d{1,2}):([0-5]\d)(am|pm)$/i.exec(cleanText(value));
+  if (!match) {
+    throw new RecordParseError("meeting.time", "meeting time is invalid");
+  }
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 1 || hour > 12) {
+    throw new RecordParseError("meeting.time", "meeting time is invalid");
+  }
+
+  const isPm = match[3]?.toLowerCase() === "pm";
+  return (hour % 12) * 60 + minute + (isPm ? 720 : 0);
+}
+
+function nullableText(value: string): string | null {
+  const normalized = cleanText(value);
+  return normalized || null;
+}
+
+function parseMeeting(meeting: Selection): Meeting {
+  const dayText = cleanText(meeting.find(".section-days").first().text());
+  const startText = cleanText(meeting.find(".class-start-time").first().text());
+  const endText = cleanText(meeting.find(".class-end-time").first().text());
+
+  if (Boolean(startText) !== Boolean(endText)) {
+    throw new RecordParseError(
+      "meeting.time",
+      "meeting must include both start and end times",
+    );
+  }
+
+  return {
+    days: parseDays(dayText),
+    startMinutes: startText ? parseTime(startText) : null,
+    endMinutes: endText ? parseTime(endText) : null,
+    displayTime: startText ? `${startText} - ${endText}` : null,
+    building: nullableText(meeting.find(".building-code").first().text()),
+    room: nullableText(meeting.find(".class-room").first().text()),
+    type: nullableText(meeting.find(".class-type").first().text()),
+  };
+}
+
 function parseSection(
   $: CheerioAPI,
   section: Selection,
   courseId: string,
+  warnings: ParseWarning[],
+  sectionIndex: number,
 ): Section {
   const number = cleanText(
     section.find(".section-id").first().text(),
@@ -208,6 +278,38 @@ function parseSection(
 
   const waitlistNode = section.find(".waitlist-count").first();
   const holdFileNode = section.find(".holdfile-count").first();
+  const meetings: Meeting[] = [];
+  const meetingSelector = [
+    ".section-days",
+    ".class-start-time",
+    ".class-end-time",
+    ".building-code",
+    ".class-room",
+    ".class-type",
+  ].join(", ");
+
+  section.find(".class-days-container .row").each((_meetingIndex, element) => {
+    const row = $(element);
+    if (row.find(meetingSelector).length === 0) {
+      return;
+    }
+
+    try {
+      meetings.push(parseMeeting(row));
+    } catch (error) {
+      if (!(error instanceof RecordParseError)) {
+        throw error;
+      }
+
+      warnings.push({
+        code: "MEETING_SKIPPED",
+        message: error.message,
+        field: error.field,
+        sectionNumber: number,
+        sectionIndex,
+      });
+    }
+  });
 
   return {
     id: `${courseId}-${number}`,
@@ -245,7 +347,7 @@ function parseSection(
         "section.seats.holdFile",
       ),
     },
-    meetings: [],
+    meetings,
   };
 }
 
@@ -324,7 +426,9 @@ export function parseCoursePage(
       ).toUpperCase() || null;
 
     try {
-      sections.push(parseSection($, $(element), id));
+      sections.push(
+        parseSection($, $(element), id, warnings, sectionIndex),
+      );
     } catch (error) {
       if (!(error instanceof RecordParseError)) {
         throw error;

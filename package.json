@@ -7,6 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "compare": "tsx src/cli/compare-snapshots.ts",
     "scrape": "tsx src/cli/scrape.ts",
     "test": "vitest run --exclude '**/*.integration.test.ts'",
     "test:live": "RUN_LIVE_TESTS=true vitest run src/testudo/*.integration.test.ts",

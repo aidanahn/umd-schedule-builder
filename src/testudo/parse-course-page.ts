@@ -152,6 +152,103 @@ function parseApprovedText($: CheerioAPI, course: Selection) {
   };
 }
 
+class RecordParseError extends Error {
+  constructor(
+    public readonly field: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "RecordParseError";
+  }
+}
+
+function requiredCount(value: string, field: string): number {
+  const normalized = cleanText(value);
+  if (!/^\d+$/.test(normalized)) {
+    throw new RecordParseError(field, `${field} is missing or invalid`);
+  }
+
+  return Number(normalized);
+}
+
+function optionalCount(
+  exists: boolean,
+  value: string,
+  field: string,
+): number | null {
+  return exists ? requiredCount(value, field) : null;
+}
+
+function parseDeliveryMode(
+  classNames: string | undefined,
+): Section["deliveryMode"] {
+  const classes = new Set((classNames ?? "").split(/\s+/));
+
+  if (classes.has("delivery-f2f")) return "face-to-face";
+  if (classes.has("delivery-blended")) return "blended";
+  if (classes.has("delivery-online")) return "online";
+  return "unknown";
+}
+
+function parseSection(
+  $: CheerioAPI,
+  section: Selection,
+  courseId: string,
+): Section {
+  const number = cleanText(
+    section.find(".section-id").first().text(),
+  ).toUpperCase();
+
+  if (!/^[A-Z0-9]{4}$/.test(number)) {
+    throw new RecordParseError(
+      "section.number",
+      "section number is missing or invalid",
+    );
+  }
+
+  const waitlistNode = section.find(".waitlist-count").first();
+  const holdFileNode = section.find(".holdfile-count").first();
+
+  return {
+    id: `${courseId}-${number}`,
+    number,
+    instructors: unique(
+      section
+        .find(".section-instructor")
+        .map((_index, node) => cleanText($(node).text()))
+        .get(),
+    ),
+    deliveryMode: parseDeliveryMode(section.attr("class")),
+    notes: unique(
+      section
+        .find(".section-texts-container .section-text")
+        .map((_index, node) => cleanText($(node).text()))
+        .get(),
+    ),
+    seats: {
+      total: requiredCount(
+        section.find(".total-seats-count").first().text(),
+        "section.seats.total",
+      ),
+      open: requiredCount(
+        section.find(".open-seats-count").first().text(),
+        "section.seats.open",
+      ),
+      waitlist: optionalCount(
+        waitlistNode.length > 0,
+        waitlistNode.text(),
+        "section.seats.waitlist",
+      ),
+      holdFile: optionalCount(
+        holdFileNode.length > 0,
+        holdFileNode.text(),
+        "section.seats.holdFile",
+      ),
+    },
+    meetings: [],
+  };
+}
+
 export function parseCoursePage(
   input: ParseCoursePageInput,
 ): ParseCoursePageResult {
@@ -217,6 +314,31 @@ export function parseCoursePage(
       .get(),
   );
   const approvedText = parseApprovedText($, course);
+  const warnings: ParseWarning[] = [];
+  const sections: Section[] = [];
+
+  course.find(".sections-container .section").each((sectionIndex, element) => {
+    const sectionNumber =
+      cleanText(
+        $(element).find(".section-id").first().text(),
+      ).toUpperCase() || null;
+
+    try {
+      sections.push(parseSection($, $(element), id));
+    } catch (error) {
+      if (!(error instanceof RecordParseError)) {
+        throw error;
+      }
+
+      warnings.push({
+        code: "SECTION_SKIPPED",
+        message: error.message,
+        field: error.field,
+        sectionNumber,
+        sectionIndex,
+      });
+    }
+  });
 
   return {
     semester: input.semester,
@@ -229,8 +351,8 @@ export function parseCoursePage(
       genEdCodes,
       description: approvedText.description,
       requirements: approvedText.requirements,
-      sections: [],
+      sections,
     },
-    warnings: [],
+    warnings,
   };
 }

@@ -1,5 +1,9 @@
 const TESTUDO_ORIGIN = "https://app.testudo.umd.edu";
 const USER_AGENT = "umd-schedule-builder/0.1";
+const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_ATTEMPTS = 3;
+const DEFAULT_BASE_DELAY_MS = 500;
+const DEFAULT_MAX_DELAY_MS = 5_000;
 
 export type FetchDepartmentPageInput = {
   semester: string;
@@ -119,33 +123,147 @@ function validateResponse(response: Response, html: string): void {
   }
 }
 
+const defaultSleep = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+function isTransientStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+function parseRetryAfter(response: Response, now: Date): number | undefined {
+  const value = response.headers.get("retry-after");
+  if (!value) {
+    return undefined;
+  }
+
+  if (/^\d+$/.test(value)) {
+    return Number(value) * 1_000;
+  }
+
+  const retryAt = Date.parse(value);
+  return Number.isNaN(retryAt) ? undefined : Math.max(0, retryAt - now.getTime());
+}
+
+function getRetryDelay(
+  response: Response | undefined,
+  attempt: number,
+  baseDelayMs: number,
+  maxDelayMs: number,
+  now: Date,
+): number {
+  const requestedDelay = response
+    ? parseRetryAfter(response, now)
+    : undefined;
+  const exponentialDelay = baseDelayMs * 2 ** (attempt - 1);
+
+  return Math.min(requestedDelay ?? exponentialDelay, maxDelayMs);
+}
+
+function positiveInteger(value: number, name: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new TestudoFetchError(
+      "INVALID_INPUT",
+      `${name} must be a positive integer`,
+    );
+  }
+
+  return value;
+}
+
 export async function fetchDepartmentPage(
   input: FetchDepartmentPageInput,
   options: FetchDepartmentPageOptions = {},
 ): Promise<FetchDepartmentPageResult> {
   const url = buildDepartmentUrl(input);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? (() => new Date());
+  const timeoutMs = positiveInteger(
+    options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    "timeoutMs",
+  );
+  const maxAttempts = positiveInteger(
+    options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+    "maxAttempts",
+  );
+  const baseDelayMs = positiveInteger(
+    options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS,
+    "baseDelayMs",
+  );
+  const maxDelayMs = positiveInteger(
+    options.maxDelayMs ?? DEFAULT_MAX_DELAY_MS,
+    "maxDelayMs",
+  );
 
-  const response = await fetchImpl(url, {
-    headers: {
-      accept: "text/html,application/xhtml+xml",
-      "user-agent": USER_AGENT,
-    },
-    redirect: "follow",
-  });
+  let lastFailure: unknown;
+  let lastWasTimeout = false;
 
-  if (!response.ok) {
-    validateResponse(response, "");
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response | undefined;
+
+    try {
+      response = await fetchImpl(url, {
+        headers: {
+          accept: "text/html,application/xhtml+xml",
+          "user-agent": USER_AGENT,
+        },
+        redirect: "follow",
+        signal: controller.signal,
+      });
+
+      if (isTransientStatus(response.status)) {
+        lastFailure = response;
+
+        if (attempt === maxAttempts) {
+          throw new TestudoFetchError(
+            "RETRIES_EXHAUSTED",
+            `Testudo remained unavailable after ${maxAttempts} attempts`,
+            { status: response.status, url: response.url || url },
+          );
+        }
+      } else {
+        if (!response.ok) {
+          validateResponse(response, "");
+        }
+
+        const html = await response.text();
+        validateResponse(response, html);
+
+        return {
+          html,
+          finalUrl: response.url || url,
+          status: response.status,
+          fetchedAt: now().toISOString(),
+        };
+      }
+    } catch (error) {
+      if (error instanceof TestudoFetchError) {
+        throw error;
+      }
+
+      lastFailure = error;
+      lastWasTimeout = controller.signal.aborted;
+
+      if (attempt === maxAttempts) {
+        break;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    await sleep(
+      getRetryDelay(response, attempt, baseDelayMs, maxDelayMs, now()),
+    );
   }
 
-  const html = await response.text();
-  validateResponse(response, html);
-
-  return {
-    html,
-    finalUrl: response.url || url,
-    status: response.status,
-    fetchedAt: now().toISOString(),
-  };
+  throw new TestudoFetchError(
+    lastWasTimeout ? "TIMEOUT" : "NETWORK_ERROR",
+    lastWasTimeout
+      ? `Testudo request timed out after ${maxAttempts} attempt(s)`
+      : `Testudo request failed after ${maxAttempts} attempt(s)`,
+    { url },
+    { cause: lastFailure },
+  );
 }

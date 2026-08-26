@@ -127,4 +127,178 @@ describe("fetchDepartmentPage", () => {
     expect(String(error)).not.toContain(responseBody);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  it.each([429, 500, 503])("retries transient HTTP %i responses", async (status) => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response("busy", {
+          status,
+          headers: { "content-type": "text/html" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("<html>Schedule of Classes</html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    const sleep = vi.fn(async () => undefined);
+
+    await expect(
+      fetchDepartmentPage(input, { fetchImpl, sleep }),
+    ).resolves.toMatchObject({ status: 200 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports exhausted retries after the final transient response", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("busy", {
+        status: 503,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+
+    await expect(
+      fetchDepartmentPage(input, {
+        fetchImpl,
+        sleep: async () => undefined,
+        maxAttempts: 3,
+      }),
+    ).rejects.toMatchObject({
+      code: "RETRIES_EXHAUSTED",
+      metadata: { status: 503 },
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("uses bounded exponential backoff", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("busy", { status: 500 }))
+      .mockResolvedValueOnce(new Response("busy", { status: 500 }))
+      .mockResolvedValueOnce(
+        new Response("<html>ok</html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    const sleep = vi.fn(async () => undefined);
+
+    await fetchDepartmentPage(input, {
+      fetchImpl,
+      sleep,
+      baseDelayMs: 600,
+      maxDelayMs: 1_000,
+    });
+
+    expect(sleep.mock.calls).toEqual([[600], [1_000]]);
+  });
+
+  it("honors a numeric Retry-After header within the delay cap", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response("slow down", {
+          status: 429,
+          headers: { "retry-after": "2" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("<html>ok</html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    const sleep = vi.fn(async () => undefined);
+
+    await fetchDepartmentPage(input, {
+      fetchImpl,
+      sleep,
+      maxDelayMs: 5_000,
+    });
+
+    expect(sleep).toHaveBeenCalledWith(2_000);
+  });
+
+  it("honors an HTTP-date Retry-After header", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response("slow down", {
+          status: 429,
+          headers: { "retry-after": "Tue, 25 Aug 2026 22:30:03 GMT" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("<html>ok</html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    const sleep = vi.fn(async () => undefined);
+
+    await fetchDepartmentPage(input, {
+      fetchImpl,
+      sleep,
+      now: () => new Date("2026-08-25T22:30:00.000Z"),
+      maxDelayMs: 5_000,
+    });
+
+    expect(sleep).toHaveBeenCalledWith(3_000);
+  });
+
+  it("reports a network error after retrying", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(new TypeError("offline"));
+
+    await expect(
+      fetchDepartmentPage(input, {
+        fetchImpl,
+        sleep: async () => undefined,
+        maxAttempts: 2,
+      }),
+    ).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts a stalled request and reports a timeout", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const fetchImpl = vi.fn<typeof fetch>(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(new DOMException("aborted", "AbortError"));
+            });
+          }),
+      );
+      const promise = fetchDepartmentPage(input, {
+        fetchImpl,
+        sleep: async () => undefined,
+        timeoutMs: 50,
+        maxAttempts: 1,
+      });
+      const assertion = expect(promise).rejects.toMatchObject({
+        code: "TIMEOUT",
+      });
+
+      await vi.advanceTimersByTimeAsync(50);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects non-positive retry options before requesting Testudo", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+
+    await expect(
+      fetchDepartmentPage(input, { fetchImpl, maxAttempts: 0 }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });

@@ -116,34 +116,167 @@ function errorMetadata(input: ParseCoursePageInput, field: string) {
     : { field };
 }
 
-function parseApprovedText($: CheerioAPI, course: Selection) {
+type CourseMetadata = {
+  description: string | null;
+  requirements: LabeledText[];
+};
+
+type CourseMetadataAccumulator = {
+  descriptionParts: string[];
+  descriptionKeys: Set<string>;
+  requirements: LabeledText[];
+  requirementKeys: Set<string>;
+};
+
+function addCourseText(
+  metadata: CourseMetadataAccumulator,
+  displayedLabel: string | null,
+  displayedText: string,
+): void {
+  const label = normalizeMetadataLabel(displayedLabel ?? "");
+  const text = cleanText(displayedText);
+
+  if (!text) {
+    return;
+  }
+
+  if (label) {
+    const key = `${label.toLowerCase()}\u0000${text.toLowerCase()}`;
+    if (!metadata.requirementKeys.has(key)) {
+      metadata.requirementKeys.add(key);
+      metadata.requirements.push({ label, text });
+    }
+    return;
+  }
+
+  const key = text.toLowerCase();
+  if (!metadata.descriptionKeys.has(key)) {
+    metadata.descriptionKeys.add(key);
+    metadata.descriptionParts.push(text);
+  }
+}
+
+const UNLABELED_REQUIREMENT_PATTERNS: ReadonlyArray<{
+  label: string;
+  pattern: RegExp;
+}> = [
+  { label: "Restriction", pattern: /^Must be\b/i },
+  { label: "Prerequisite", pattern: /^Minimum grade of\b/i },
+  { label: "Restriction", pattern: /^Permission of\b/i },
+];
+
+const NORMALIZED_METADATA_LABELS = new Map<string, string>([
+  ["additional information", "Additional information"],
+  ["corequisite", "Corequisite"],
+  ["corequisites", "Corequisite"],
+  ["credit only granted for", "Credit only granted for"],
+  ["cross-listed with", "Cross-listed with"],
+  ["formerly", "Formerly"],
+  ["jointly offered with", "Jointly offered with"],
+  ["prerequisite", "Prerequisite"],
+  ["prerequisites", "Prerequisite"],
+  ["recommended", "Recommended"],
+  ["restriction", "Restriction"],
+  ["restrictions", "Restriction"],
+]);
+
+const metadataLabelPattern = [...NORMALIZED_METADATA_LABELS.keys()].join("|");
+const labelWithoutColonPattern = [
+  "cross-listed with",
+  "jointly offered with",
+  "credit only granted for",
+].join("|");
+const INLINE_METADATA_MARKER = new RegExp(
+  `(?:^|(?<=[.!?])\\s+)(?:(${metadataLabelPattern}):\\s*|(${labelWithoutColonPattern})\\s+)`,
+  "gi",
+);
+
+function normalizeMetadataLabel(value: string): string {
+  const label = cleanText(value).replace(/:$/, "");
+  return NORMALIZED_METADATA_LABELS.get(label.toLowerCase()) ?? label;
+}
+
+function classifyUnlabeledCourseText(
+  metadata: CourseMetadataAccumulator,
+  displayedText: string,
+): void {
+  const text = cleanText(displayedText);
+  if (!text) {
+    return;
+  }
+
+  const markers = [...text.matchAll(INLINE_METADATA_MARKER)];
+  if (markers.length > 0) {
+    const firstMarkerIndex = markers[0]?.index ?? 0;
+    addCourseText(metadata, null, text.slice(0, firstMarkerIndex));
+
+    markers.forEach((marker, index) => {
+      const label = marker[1]
+        ? normalizeMetadataLabel(marker[1])
+        : normalizeMetadataLabel(marker[2] ?? "");
+      const textStart = (marker.index ?? 0) + marker[0].length;
+      const textEnd = markers[index + 1]?.index ?? text.length;
+      addCourseText(metadata, label, text.slice(textStart, textEnd));
+    });
+    return;
+  }
+
+  const inferredRequirement = UNLABELED_REQUIREMENT_PATTERNS.find(({ pattern }) =>
+    pattern.test(text),
+  );
+  addCourseText(metadata, inferredRequirement?.label ?? null, text);
+}
+
+function splitCourseTextParagraphs(block: Selection): string[] {
+  const html = block.html() ?? "";
+  const withLineBreaks = html.replace(/<br\s*\/?\s*>/gi, "\n");
+  const $fragment = load(`<div>${withLineBreaks}</div>`);
+
+  return $fragment("div")
+    .first()
+    .text()
+    .split(/\n\s*\n+/)
+    .map(cleanText)
+    .filter(Boolean);
+}
+
+function parseCourseMetadata($: CheerioAPI, course: Selection): CourseMetadata {
   const descriptionParts: string[] = [];
   const requirements: LabeledText[] = [];
+  const metadata: CourseMetadataAccumulator = {
+    descriptionParts,
+    descriptionKeys: new Set(),
+    requirements,
+    requirementKeys: new Set(),
+  };
 
-  course.find(".approved-course-text").each((_index, element) => {
-    const block = $(element);
-    const labels = block.find("strong");
-
-    if (labels.length === 0) {
-      const text = cleanText(block.text());
-      if (text) {
-        descriptionParts.push(text);
+  course
+    .find(".approved-course-text, .course-text")
+    .each((_index, element) => {
+      const block = $(element);
+      if (block.hasClass("course-text")) {
+        splitCourseTextParagraphs(block).forEach((paragraph) =>
+          classifyUnlabeledCourseText(metadata, paragraph),
+        );
+        return;
       }
-      return;
-    }
 
-    labels.each((_labelIndex, labelElement) => {
-      const labelNode = $(labelElement);
-      const displayedLabel = cleanText(labelNode.text());
-      const label = displayedLabel.replace(/:$/, "");
-      const parentText = cleanText(labelNode.parent().text());
-      const text = cleanText(parentText.slice(displayedLabel.length));
+      const labels = block.find("strong");
 
-      if (label && text) {
-        requirements.push({ label, text });
+      if (labels.length === 0) {
+        classifyUnlabeledCourseText(metadata, block.text());
+        return;
       }
+
+      labels.each((_labelIndex, labelElement) => {
+        const labelNode = $(labelElement);
+        const displayedLabel = cleanText(labelNode.text());
+        const parentText = cleanText(labelNode.parent().text());
+        const text = cleanText(parentText.slice(displayedLabel.length));
+
+        addCourseText(metadata, displayedLabel, text);
+      });
     });
-  });
 
   return {
     description:
@@ -415,7 +548,7 @@ export function parseCoursePage(
       .map((_index, element) => cleanText($(element).text()))
       .get(),
   );
-  const approvedText = parseApprovedText($, course);
+  const courseMetadata = parseCourseMetadata($, course);
   const warnings: ParseWarning[] = [];
   const sections: Section[] = [];
 
@@ -453,8 +586,8 @@ export function parseCoursePage(
       credits: { min, max },
       gradingMethods,
       genEdCodes,
-      description: approvedText.description,
-      requirements: approvedText.requirements,
+      description: courseMetadata.description,
+      requirements: courseMetadata.requirements,
       sections,
     },
     warnings,

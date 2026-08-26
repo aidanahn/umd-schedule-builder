@@ -60,6 +60,7 @@ type Section = {
   number: string;
   instructors: string[];
   deliveryMode: "face-to-face" | "blended" | "online" | "unknown";
+  notes: string[];
   seats: {
     total: number;
     open: number;
@@ -93,6 +94,8 @@ type ParseWarning = {
 Full section IDs use `<course-id>-<section-number>`, for example `CMSC131-0101`. The section number is also retained because Testudo displays and accepts it separately.
 
 `requirements` preserves labeled academic text such as prerequisites, corequisites, restrictions, cross-listing, and credit exclusions. Unlabeled approved-course text is joined in display order as the description. This milestone does not interpret academic rules into prerequisite logic.
+
+`notes` preserves section-specific restriction and informational text in display order. For example, a section may contain `"Restricted to students in Freshmen Connection."`. Notes remain opaque strings in this milestone; the parser does not decide whether a student satisfies them.
 
 ## Meeting Normalization
 
@@ -138,7 +141,9 @@ A malformed section is omitted while other sections continue parsing. Its warnin
 
 Waitlist and hold-file counts are independently optional. If their markup is absent, their values are `null` without a warning. If Testudo displays either count but the value is malformed, that section is rejected because incorrect availability data could lead to bad notifications.
 
-Instructor, building, room, meeting type, description, grading methods, GenEd codes, and requirements are optional. Missing optional markup is represented by `null` or an empty array and does not produce noise. A warning is reserved for markup that is present but invalid.
+Instructor, building, room, meeting type, section notes, description, grading methods, GenEd codes, and requirements are optional. Missing optional markup is represented by `null` or an empty array and does not produce noise. A warning is reserved for markup that is present but invalid.
+
+Only note text scoped to an individual section is added to that section. A page-level banner that applies to multiple sections is not duplicated onto every section unless Testudo renders the text inside each affected section.
 
 The parser does not impose business rules such as `open <= total`. Testudo may represent seat management states that do not follow assumptions made by a generic enrollment system; the parser's job is to faithfully capture valid numeric values.
 
@@ -163,6 +168,7 @@ Unit tests use small HTML fixtures that exercise one behavior at a time:
 - a normal course with multiple sections and lecture/discussion meetings;
 - variable credits;
 - multiple instructors;
+- section-specific restrictions and informational notes;
 - face-to-face, blended, online, and unknown delivery modes;
 - GenEd codes and labeled requirements;
 - HTML entities, duplicate values, and inconsistent whitespace;
@@ -197,5 +203,6 @@ Cheerio is the only new runtime dependency. The existing fetch module remains un
 - One malformed meeting does not prevent its section or valid sibling meetings from being returned.
 - Course IDs and section IDs remain required.
 - Missing waitlist or hold-file markup produces `null`, not zero.
+- Section-specific restriction and note text is preserved without interpretation.
 - Default tests and type checking pass without external requests.
 - The opt-in live CMSC131 test passes against Testudo.

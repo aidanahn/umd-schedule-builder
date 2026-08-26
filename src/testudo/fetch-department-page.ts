@@ -10,6 +10,11 @@ export type FetchDepartmentPageInput = {
   department: string;
 };
 
+export type FetchDepartmentSectionsInput = {
+  semester: string;
+  courseIds: string[];
+};
+
 export type FetchDepartmentPageResult = {
   html: string;
   finalUrl: string;
@@ -73,6 +78,34 @@ function normalizeInput(input: FetchDepartmentPageInput) {
 export function buildDepartmentUrl(input: FetchDepartmentPageInput): string {
   const { semester, department } = normalizeInput(input);
   return new URL(`/soc/${semester}/${department}`, TESTUDO_ORIGIN).toString();
+}
+
+export function buildSectionsUrl(input: FetchDepartmentSectionsInput): string {
+  if (!/^\d{6}$/.test(input.semester)) {
+    throw new TestudoFetchError(
+      "INVALID_INPUT",
+      "semester must contain exactly six digits in YYYYMM format",
+    );
+  }
+
+  const courseIds = [
+    ...new Set(input.courseIds.map((courseId) => courseId.toUpperCase())),
+  ];
+  if (
+    courseIds.length === 0 ||
+    courseIds.some((courseId) => !/^[A-Z]{4}\d{3}[A-Z]?$/.test(courseId))
+  ) {
+    throw new TestudoFetchError(
+      "INVALID_INPUT",
+      "courseIds must contain at least one valid Testudo course ID",
+    );
+  }
+
+  const url = new URL(`/soc/${input.semester}/sections`, TESTUDO_ORIGIN);
+  for (const courseId of courseIds) {
+    url.searchParams.append("courseIds", courseId);
+  }
+  return url.toString();
 }
 
 function isAuthenticationPage(html: string, finalUrl: string): boolean {
@@ -170,11 +203,10 @@ function positiveInteger(value: number, name: string): number {
   return value;
 }
 
-export async function fetchDepartmentPage(
-  input: FetchDepartmentPageInput,
+async function fetchTestudoPage(
+  url: string,
   options: FetchDepartmentPageOptions = {},
 ): Promise<FetchDepartmentPageResult> {
-  const url = buildDepartmentUrl(input);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? (() => new Date());
@@ -266,4 +298,18 @@ export async function fetchDepartmentPage(
     { url },
     { cause: lastFailure },
   );
+}
+
+export async function fetchDepartmentPage(
+  input: FetchDepartmentPageInput,
+  options: FetchDepartmentPageOptions = {},
+): Promise<FetchDepartmentPageResult> {
+  return await fetchTestudoPage(buildDepartmentUrl(input), options);
+}
+
+export async function fetchDepartmentSections(
+  input: FetchDepartmentSectionsInput,
+  options: FetchDepartmentPageOptions = {},
+): Promise<FetchDepartmentPageResult> {
+  return await fetchTestudoPage(buildSectionsUrl(input), options);
 }

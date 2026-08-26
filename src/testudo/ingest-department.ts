@@ -1,8 +1,13 @@
 import {
   buildDepartmentSnapshot,
+  DepartmentSnapshotError,
+  findDepartmentCourseIds,
   type DepartmentSnapshot,
 } from "./build-department-snapshot.js";
-import { fetchDepartmentPage } from "./fetch-department-page.js";
+import {
+  fetchDepartmentPage,
+  fetchDepartmentSections,
+} from "./fetch-department-page.js";
 import {
   writeDepartmentSnapshot,
   type WriteDepartmentSnapshotOptions,
@@ -20,6 +25,7 @@ export type IngestDepartmentResult = {
 
 export type IngestDepartmentOptions = {
   fetchPage?: typeof fetchDepartmentPage;
+  fetchSections?: typeof fetchDepartmentSections;
   writeSnapshot?: typeof writeDepartmentSnapshot;
   now?: () => Date;
   outputRoot?: string;
@@ -36,9 +42,23 @@ export async function ingestDepartment(
   const fetched = await (options.fetchPage ?? fetchDepartmentPage)(
     normalizedInput,
   );
+  const courseIds = findDepartmentCourseIds(fetched.html);
+  if (courseIds.length === 0) {
+    throw new DepartmentSnapshotError(
+      "NO_COURSES_FOUND",
+      "Testudo department page did not contain course containers",
+    );
+  }
+  const sections = await (
+    options.fetchSections ?? fetchDepartmentSections
+  )({
+    semester: normalizedInput.semester,
+    courseIds,
+  });
   const snapshot = buildDepartmentSnapshot({
     ...normalizedInput,
     html: fetched.html,
+    sectionsHtml: sections.html,
     collectedAt: (options.now ?? (() => new Date()))().toISOString(),
     sourceUrl: fetched.finalUrl,
   });

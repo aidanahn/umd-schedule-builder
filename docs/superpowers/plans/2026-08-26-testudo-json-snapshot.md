@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a parameterized CLI that fetches one Testudo department page and writes all successfully parsed courses and nested sections to a timestamped JSON snapshot.
+**Goal:** Add a parameterized CLI that fetches Testudo department metadata plus bulk section rows and writes all successfully parsed courses and sections to a timestamped JSON snapshot.
 
-**Architecture:** A pure department-page builder discovers top-level course containers and aggregates the existing one-course parser results. A filesystem writer owns atomic timestamped output, an ingestion coordinator connects the existing fetcher to the builder and writer, and a thin CLI handles arguments, messages, and exit codes.
+**Architecture:** A pure department-page builder discovers top-level course containers, attaches Testudo's bulk section response, and aggregates the existing one-course parser results. A filesystem writer owns atomic timestamped output, an ingestion coordinator connects the metadata and bulk-section fetches to the builder and writer, and a thin CLI handles arguments, messages, and exit codes.
 
 **Tech Stack:** Node.js 20+, TypeScript 5.9, Cheerio 1.2, Vitest 3.2, tsx
 
@@ -12,27 +12,31 @@
 
 ## Global Constraints
 
-- Fetch the Testudo department page exactly once per ingestion run.
+- Fetch the Testudo department page exactly once and the bulk sections endpoint exactly once per ingestion run.
 - Require a six-digit semester and a four-letter department; uppercase the department.
 - Preserve Testudo course display order and all nested sections returned by `parseCoursePage`.
 - Write a partial snapshot and return a failing CLI exit code when at least one course fails.
 - Write no final snapshot when fetching fails, no course containers exist, or zero courses parse.
 - Never include raw HTML, stack traces, or temporary paths in snapshot failures.
 - Write snapshots beneath `data/snapshots/<semester>/<department>/<UTC timestamp>.json` without overwriting older runs.
-- Use a temporary file in the destination directory and an atomic rename for final output.
+- Use a temporary file in the destination directory and atomic exclusive publication for final output.
 - Keep default tests offline; live tests remain opt-in through `npm run test:live`.
 - Do not add PostgreSQL, scheduled jobs, comparisons, notifications, accounts, or website code in this milestone.
+
+Implementation discovery: live validation showed that Testudo marks department sections as `sections-not-loaded`. Its official Show All Sections code submits all course IDs together to `/soc/<semester>/sections`. This bulk request supersedes task text below that assumed sections were already nested in the initial department response. Courses omitted from the bulk response are valid zero-section courses, as confirmed against their direct Testudo pages. The writer uses a same-directory hard link for atomic exclusive publication because portable Node `rename()` can overwrite an existing final path; this supersedes the rename-specific Task 2 snippets while preserving the spec's no-overwrite guarantee.
 
 ## File Map
 
 - Create `src/testudo/build-department-snapshot.ts`: snapshot types, top-level course discovery, independent parsing, warning/failure aggregation, and zero-success errors.
 - Create `src/testudo/build-department-snapshot.test.ts`: offline aggregation tests using a trimmed department fixture and focused malformed markup.
 - Create `src/testudo/fixtures/cmsc-202608-department.html`: two realistic CMSC course containers with nested sections.
-- Create `src/testudo/write-snapshot.ts`: timestamped path creation, pretty JSON encoding, temporary write, atomic rename, and owned-temp cleanup.
+- Create `src/testudo/write-snapshot.ts`: timestamped path creation, pretty JSON encoding, temporary write, atomic exclusive publication, and owned-temp cleanup.
 - Create `src/testudo/write-snapshot.test.ts`: deterministic writer tests with injected file operations.
 - Create `src/testudo/ingest-department.ts`: one-fetch orchestration and injected clock/writer dependencies.
 - Create `src/testudo/ingest-department.test.ts`: offline coordinator tests proving a single fetch and correct write behavior.
 - Create `src/testudo/ingest-department.integration.test.ts`: opt-in live `202608` CMSC ingestion into a temporary directory.
+- Modify `src/testudo/fetch-department-page.ts`: reuse the existing retry/validation behavior for Testudo's bulk sections endpoint.
+- Modify `src/testudo/fetch-department-page.test.ts`: verify repeated course ID query parameters and one bulk request.
 - Create `src/cli/scrape.ts`: CLI argument parsing, human-readable reporting, and process exit mapping.
 - Create `src/cli/scrape.test.ts`: direct CLI-function tests without child processes or network access.
 - Modify `package.json`: add `tsx` and the `scrape` script.

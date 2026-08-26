@@ -32,6 +32,7 @@ export type DepartmentSnapshot = {
 };
 export type BuildDepartmentSnapshotInput = {
   html: string;
+  sectionsHtml?: string;
   semester: string;
   department: string;
   collectedAt: string;
@@ -56,10 +57,24 @@ function visibleCourseId(text: string): string | null {
   return /^[A-Z]{4}\d{3}[A-Z]?$/.test(id) ? id : null;
 }
 
+export function findDepartmentCourseIds(html: string): string[] {
+  const $ = load(html);
+  return $(".course")
+    .filter((_index, element) => $(element).parents(".course").length === 0)
+    .map((_index, element) =>
+      visibleCourseId($(element).find(".course-id").first().text()),
+    )
+    .get()
+    .filter((courseId): courseId is string => courseId !== null);
+}
+
 export function buildDepartmentSnapshot(
   input: BuildDepartmentSnapshotInput,
 ): DepartmentSnapshot {
   const $ = load(input.html);
+  const sectionHtmlByCourseId = input.sectionsHtml
+    ? collectSectionHtml(input.sectionsHtml)
+    : undefined;
   const courseNodes = $(".course")
     .filter((_index, element) => $(element).parents(".course").length === 0)
     .toArray();
@@ -78,6 +93,13 @@ export function buildDepartmentSnapshot(
   for (const element of courseNodes) {
     const container = $(element);
     const courseId = visibleCourseId(container.find(".course-id").first().text());
+
+    if (sectionHtmlByCourseId && courseId) {
+      const sectionsHtml = sectionHtmlByCourseId.get(courseId);
+      if (sectionsHtml) {
+        container.append(sectionsHtml);
+      }
+    }
 
     try {
       const result = parseCoursePage({
@@ -132,4 +154,23 @@ export function buildDepartmentSnapshot(
     warnings,
     failures,
   };
+}
+
+function collectSectionHtml(html: string): Map<string, string> {
+  const sections$ = load(html);
+  const byCourseId = new Map<string, string>();
+
+  sections$(".course-sections").each((_index, element) => {
+    const courseId = visibleCourseId(sections$(element).attr("id") ?? "");
+    if (!courseId) {
+      return;
+    }
+
+    byCourseId.set(
+      courseId,
+      sections$(element).find(".sections-container").first().toString(),
+    );
+  });
+
+  return byCourseId;
 }

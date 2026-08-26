@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildDepartmentUrl,
+  buildSectionsUrl,
   fetchDepartmentPage,
+  fetchDepartmentSections,
   TestudoFetchError,
 } from "./fetch-department-page.js";
 
@@ -33,6 +35,36 @@ describe("buildDepartmentUrl", () => {
       ),
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildSectionsUrl", () => {
+  it("builds Testudo's bulk sections URL with repeated course IDs", () => {
+    expect(
+      buildSectionsUrl({
+        semester: "202608",
+        courseIds: ["cmsc131", "CMSC132"],
+      }),
+    ).toBe(
+      "https://app.testudo.umd.edu/soc/202608/sections?courseIds=CMSC131&courseIds=CMSC132",
+    );
+  });
+
+  it("fetches all requested section rows in one request", async () => {
+    const html = '<div class="course-sections" id="CMSC131"></div>';
+    const response = new Response(html, {
+      status: 200,
+      headers: { "content-type": "text/html;charset=ISO-8859-1" },
+    });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response);
+
+    await expect(
+      fetchDepartmentSections(
+        { semester: "202608", courseIds: ["CMSC131"] },
+        { fetchImpl },
+      ),
+    ).resolves.toMatchObject({ html, status: 200 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
 

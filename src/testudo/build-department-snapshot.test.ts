@@ -21,6 +21,55 @@ const input = {
 };
 
 describe("buildDepartmentSnapshot", () => {
+  it("merges Testudo's bulk section response into matching courses", () => {
+    const departmentHtml = `
+      <div class="course" id="CMSC131">
+        <span class="course-id">CMSC131</span>
+        <span class="course-title">Object-Oriented Programming I</span>
+        <span class="course-min-credits">4</span>
+        <fieldset class="sections-fieldset sections-not-loaded"></fieldset>
+      </div>
+    `;
+    const sectionsHtml = `
+      <div class="course-sections" id="CMSC131">
+        <div class="sections-container">
+          <div class="section delivery-f2f">
+            <span class="section-id">0101</span>
+            <span class="total-seats-count">32</span>
+            <span class="open-seats-count">2</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const snapshot = buildDepartmentSnapshot({
+      ...input,
+      html: departmentHtml,
+      sectionsHtml,
+    });
+
+    expect(snapshot.summary.sectionsParsed).toBe(1);
+    expect(snapshot.courses[0]?.sections[0]?.id).toBe("CMSC131-0101");
+  });
+
+  it("keeps a course with no offered sections when no wrapper is returned", () => {
+    const snapshot = buildDepartmentSnapshot({
+      ...input,
+      html: `
+        <div class="course" id="CMSC132">
+          <span class="course-id">CMSC132</span>
+          <span class="course-title">Object-Oriented Programming II</span>
+          <span class="course-min-credits">4</span>
+        </div>
+      `,
+      sectionsHtml: "<div></div>",
+    });
+
+    expect(snapshot.status).toBe("complete");
+    expect(snapshot.courses[0]).toMatchObject({ id: "CMSC132", sections: [] });
+    expect(snapshot.failures).toEqual([]);
+  });
+
   it("parses courses and their nested sections in display order", () => {
     const snapshot = buildDepartmentSnapshot(input);
 

@@ -7,6 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "scrape": "tsx src/cli/scrape.ts",
     "test": "vitest run --exclude '**/*.integration.test.ts'",
     "test:live": "RUN_LIVE_TESTS=true vitest run src/testudo/*.integration.test.ts",
     "typecheck": "tsc --noEmit",
@@ -14,6 +15,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
   },

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Fetch one Testudo department page and turn all usable course and section data into a timestamped, normalized JSON snapshot. The first production target is Fall 2026 CMSC (`202608`, `CMSC`), while the command remains reusable for other semesters and departments.
+Fetch Testudo's department metadata and bulk section data, then turn all usable courses and sections into a timestamped, normalized JSON snapshot. The first production target is Fall 2026 CMSC (`202608`, `CMSC`), while the command remains reusable for other semesters and departments.
 
 This milestone connects the existing department-page fetcher and course parser into a complete ingestion run. It deliberately uses local JSON instead of a database so the full dataset can be inspected and stabilized before PostgreSQL becomes the source of seat history.
 
@@ -25,14 +25,16 @@ One ingestion run proceeds in this order:
 1. Validate and normalize the semester and department arguments.
 2. Fetch the Testudo department page once with the existing fetcher.
 3. Load the HTML with Cheerio and locate every top-level `.course` container in display order.
-4. Serialize each course container and pass it independently to `parseCoursePage` with the shared semester and department URL.
-5. Collect valid courses, parser warnings, sanitized failures, and summary counts.
-6. Refuse to write a snapshot if no courses parsed successfully.
-7. Write the snapshot to a temporary file in its destination directory, then atomically rename it to the final timestamped path.
+4. Send all discovered course IDs in one request to Testudo's `/soc/<semester>/sections` endpoint, matching the site's Show All Sections behavior.
+5. Attach each returned `.course-sections` block to its matching course container. A course omitted from the response is retained with zero sections because Testudo uses omission for courses with no offered sections.
+6. Serialize each enriched course container and pass it independently to `parseCoursePage` with the shared semester and department URL.
+7. Collect valid courses, parser warnings, sanitized failures, and summary counts.
+8. Refuse to write a snapshot if no courses parsed successfully.
+9. Write the snapshot to a temporary file in its destination directory, then atomically publish it to the final timestamped path without overwriting an existing snapshot.
 
-The department page already nests section rows under each course. Serializing the whole course container preserves its `.section` elements, including instructors, availability counts, meetings, rooms, delivery mode, and section-specific notes. The browser's Show/Hide Sections control only changes presentation and does not require extra HTTP requests.
+The initial department HTML contains course metadata but marks sections as `sections-not-loaded`. Testudo's own JavaScript loads all section rows through one bulk endpoint request. The scraper mirrors that public page behavior, then enriches each course container before parsing instructors, availability counts, meetings, rooms, delivery mode, and section-specific notes.
 
-The scraper will not make one request per course and will not retry individual course pages in this milestone. That keeps runs fast, minimizes traffic to Testudo, and reuses the existing parser without introducing a second ingestion path.
+The scraper makes two successful requests per run—one department metadata request and one bulk sections request. It will not make one request per course or retry individual course pages in this milestone. That keeps runs fast, minimizes traffic to Testudo, and reuses the existing parser without introducing a per-course ingestion path.
 
 ## Snapshot Location and Naming
 
@@ -98,7 +100,7 @@ The status is `complete` when every discovered course parses. It is `partial` wh
 
 The ingestion coordinator owns fetching, course-container discovery, aggregation, and failure policy. It receives dependencies for fetching, time, and snapshot writing so its behavior can be exercised offline.
 
-The snapshot writer owns directory creation, deterministic JSON serialization, temporary-file cleanup, and atomic rename. It does not know how Testudo works.
+The snapshot writer owns directory creation, deterministic JSON serialization, temporary-file cleanup, and atomic exclusive publication. It does not know how Testudo works.
 
 The CLI owns argument parsing, user-facing output, and mapping coordinator results or errors to process exit codes. It contains no HTML selectors or parsing rules.
 
@@ -118,7 +120,7 @@ The following failures write no final snapshot:
 - failure to fetch or validate the department page;
 - no course containers found;
 - zero successfully parsed courses;
-- failure during final snapshot writing or atomic rename.
+- failure during final snapshot writing or publication.
 
 Temporary files use a unique suffix in the destination directory. If writing or renaming fails, the writer attempts to remove its own temporary file before rethrowing the original error.
 
@@ -127,7 +129,7 @@ Temporary files use a unique suffix in the destination directory. If writing or 
 Default tests remain offline and cover:
 
 - required CLI arguments, department normalization, and invalid inputs;
-- multiple course containers with nested section rows;
+- multiple course containers enriched from a separate bulk section response;
 - preservation of course display order;
 - aggregation of sections and parser warnings;
 - one malformed course beside valid courses;
@@ -172,7 +174,7 @@ When PostgreSQL is introduced, the coordinator's normalized `DepartmentSnapshot`
 
 ## Acceptance Criteria
 
-- `npm run scrape -- --semester 202608 --department CMSC` fetches the department once and includes nested course sections in the output.
+- `npm run scrape -- --semester 202608 --department CMSC` fetches department metadata once, fetches all section rows once, and includes the matched sections in the output.
 - Each run writes a new atomic snapshot beneath the approved semester and department path.
 - The snapshot follows schema version 1 and contains collection metadata, normalized courses, warnings, failures, and accurate summary counts.
 - One malformed course does not discard valid sibling courses; the partial snapshot is written and the CLI exits nonzero.

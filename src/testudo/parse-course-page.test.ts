@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -79,6 +81,11 @@ const sectionHtml = `
     </div>
   </div>
 `;
+
+const cmsc131Fixture = readFileSync(
+  new URL("./fixtures/cmsc131-202608.html", import.meta.url),
+  "utf8",
+);
 
 describe("parseCoursePage", () => {
   it("parses normalized course metadata", () => {
@@ -376,5 +383,35 @@ describe("parseCoursePage meetings", () => {
         field: "meeting.time",
       }),
     );
+  });
+});
+
+describe("parseCoursePage Testudo fixture", () => {
+  it("parses the trimmed CMSC131 page", () => {
+    const result = parseCoursePage({
+      html: cmsc131Fixture,
+      semester: "202608",
+    });
+
+    expect(result.course.id).toBe("CMSC131");
+    expect(result.course.sections).toHaveLength(2);
+    expect(result.course.sections[0]).toMatchObject({
+      id: "CMSC131-0101",
+      meetings: [
+        { days: ["M", "W", "F"], startMinutes: 600, endMinutes: 650 },
+        {
+          days: ["M", "W"],
+          startMinutes: 660,
+          endMinutes: 710,
+          type: "Discussion",
+        },
+      ],
+    });
+    expect(result.course.sections[1]).toMatchObject({
+      id: "CMSC131-FC01",
+      notes: ["Restricted to students in Freshmen Connection."],
+      seats: { holdFile: 6 },
+    });
+    expect(result.warnings).toEqual([]);
   });
 });

@@ -181,7 +181,7 @@ Unit tests use small HTML fixtures that exercise one behavior at a time:
 
 A trimmed, checked-in CMSC131 Testudo fixture protects the selectors against realistic nesting without making a network request. The fixture contains only enough source HTML to cover the course, section, seat, and meeting structures needed by the parser.
 
-An opt-in live integration test will call the existing fetcher for `202608/CMSC/CMSC131`, parse the result, and verify course identity and the presence of section data. Default tests remain offline.
+An opt-in live integration test will make one direct request to `202608/CMSC/CMSC131`, parse the result, and verify course identity and the presence of section data. Default tests remain offline. Course-detail fetch orchestration is intentionally deferred to the ingestion-coordinator milestone.
 
 ## File Structure
 

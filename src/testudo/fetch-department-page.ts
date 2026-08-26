@@ -1,4 +1,5 @@
 const TESTUDO_ORIGIN = "https://app.testudo.umd.edu";
+const USER_AGENT = "umd-schedule-builder/0.1";
 
 export type FetchDepartmentPageInput = {
   semester: string;
@@ -70,11 +71,81 @@ export function buildDepartmentUrl(input: FetchDepartmentPageInput): string {
   return new URL(`/soc/${semester}/${department}`, TESTUDO_ORIGIN).toString();
 }
 
+function isAuthenticationPage(html: string, finalUrl: string): boolean {
+  const pathname = finalUrl ? new URL(finalUrl).pathname : "";
+
+  return (
+    /(?:login|cas|authenticate)/i.test(pathname) ||
+    /<title[^>]*>[^<]*(?:login|sign in|central authentication service)/i.test(
+      html,
+    )
+  );
+}
+
+function validateResponse(response: Response, html: string): void {
+  const metadata = { status: response.status, url: response.url };
+
+  if (!response.ok) {
+    throw new TestudoFetchError(
+      "HTTP_ERROR",
+      `Testudo returned HTTP ${response.status}`,
+      metadata,
+    );
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!/^text\/html(?:;|$)/i.test(contentType)) {
+    throw new TestudoFetchError(
+      "UNEXPECTED_CONTENT_TYPE",
+      "Testudo returned a non-HTML response",
+      metadata,
+    );
+  }
+
+  if (html.trim().length === 0) {
+    throw new TestudoFetchError(
+      "EMPTY_RESPONSE",
+      "Testudo returned an empty HTML response",
+      metadata,
+    );
+  }
+
+  if (isAuthenticationPage(html, response.url)) {
+    throw new TestudoFetchError(
+      "AUTH_PAGE",
+      "Testudo returned an authentication page",
+      metadata,
+    );
+  }
+}
+
 export async function fetchDepartmentPage(
   input: FetchDepartmentPageInput,
   options: FetchDepartmentPageOptions = {},
 ): Promise<FetchDepartmentPageResult> {
-  buildDepartmentUrl(input);
-  void options;
-  throw new TestudoFetchError("NETWORK_ERROR", "fetch is not implemented");
+  const url = buildDepartmentUrl(input);
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const now = options.now ?? (() => new Date());
+
+  const response = await fetchImpl(url, {
+    headers: {
+      accept: "text/html,application/xhtml+xml",
+      "user-agent": USER_AGENT,
+    },
+    redirect: "follow",
+  });
+
+  if (!response.ok) {
+    validateResponse(response, "");
+  }
+
+  const html = await response.text();
+  validateResponse(response, html);
+
+  return {
+    html,
+    finalUrl: response.url || url,
+    status: response.status,
+    fetchedAt: now().toISOString(),
+  };
 }

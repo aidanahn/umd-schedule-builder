@@ -1,33 +1,23 @@
 import {
-  buildDepartmentSnapshot,
-  DepartmentSnapshotError,
-  findDepartmentCourseIds,
-  type DepartmentSnapshot,
-} from "./build-department-snapshot.js";
-import {
-  fetchDepartmentPage,
-  fetchDepartmentSections,
-} from "./fetch-department-page.js";
+  collectDepartmentSnapshot,
+  type CollectDepartmentSnapshotOptions,
+  type IngestDepartmentInput,
+} from "./collect-department-snapshot.js";
+import type { DepartmentSnapshot } from "./build-department-snapshot.js";
 import {
   writeDepartmentSnapshot,
   type WriteDepartmentSnapshotOptions,
 } from "./write-snapshot.js";
 
-export type IngestDepartmentInput = {
-  semester: string;
-  department: string;
-};
+export type { IngestDepartmentInput } from "./collect-department-snapshot.js";
 
 export type IngestDepartmentResult = {
   snapshot: DepartmentSnapshot;
   path: string;
 };
 
-export type IngestDepartmentOptions = {
-  fetchPage?: typeof fetchDepartmentPage;
-  fetchSections?: typeof fetchDepartmentSections;
+export type IngestDepartmentOptions = CollectDepartmentSnapshotOptions & {
   writeSnapshot?: typeof writeDepartmentSnapshot;
-  now?: () => Date;
   outputRoot?: string;
 };
 
@@ -35,37 +25,12 @@ export async function ingestDepartment(
   input: IngestDepartmentInput,
   options: IngestDepartmentOptions = {},
 ): Promise<IngestDepartmentResult> {
-  const normalizedInput = {
-    semester: input.semester,
-    department: input.department.toUpperCase(),
-  };
-  const fetched = await (options.fetchPage ?? fetchDepartmentPage)(
-    normalizedInput,
-  );
-  const courseIds = findDepartmentCourseIds(fetched.html);
-  if (courseIds.length === 0) {
-    throw new DepartmentSnapshotError(
-      "NO_COURSES_FOUND",
-      "Testudo department page did not contain course containers",
-    );
-  }
-  const sections = await (
-    options.fetchSections ?? fetchDepartmentSections
-  )({
-    semester: normalizedInput.semester,
-    courseIds,
-  });
-  const snapshot = buildDepartmentSnapshot({
-    ...normalizedInput,
-    html: fetched.html,
-    sectionsHtml: sections.html,
-    collectedAt: (options.now ?? (() => new Date()))().toISOString(),
-    sourceUrl: fetched.finalUrl,
-  });
-  const writeOptions: WriteDepartmentSnapshotOptions = options.outputRoot
-    ? { outputRoot: options.outputRoot }
+  const { writeSnapshot, outputRoot, ...collectOptions } = options;
+  const snapshot = await collectDepartmentSnapshot(input, collectOptions);
+  const writeOptions: WriteDepartmentSnapshotOptions = outputRoot
+    ? { outputRoot }
     : {};
-  const path = await (options.writeSnapshot ?? writeDepartmentSnapshot)(
+  const path = await (writeSnapshot ?? writeDepartmentSnapshot)(
     snapshot,
     writeOptions,
   );

@@ -19,6 +19,7 @@ describeDatabase("PostgreSQL schema", () => {
     const connectionString = assertTestDatabaseUrl(process.env.TEST_DATABASE_URL);
     connection = createDatabaseConnection({ connectionString });
 
+    await connection.pool.query("drop schema if exists drizzle cascade");
     await connection.pool.query("drop schema public cascade");
     await connection.pool.query("create schema public");
     await migrate(connection.db, { migrationsFolder: "./drizzle" });

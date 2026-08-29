@@ -16,7 +16,7 @@
     "ingest:db": "tsx src/cli/ingest-db.ts",
     "scrape": "tsx src/cli/scrape.ts",
     "test": "vitest run --exclude '**/*.integration.test.ts'",
-    "test:db": "RUN_DB_TESTS=true vitest run src/db/*.integration.test.ts",
+    "test:db": "RUN_DB_TESTS=true vitest run --no-file-parallelism src/db/*.integration.test.ts",
     "test:live": "RUN_LIVE_TESTS=true vitest run src/testudo/*.integration.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test"

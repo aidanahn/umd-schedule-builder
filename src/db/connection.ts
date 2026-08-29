@@ -5,10 +5,16 @@ import { schema } from "./schema.js";
 
 export type AppDatabase = NodePgDatabase<typeof schema>;
 
-export class DatabaseConfigurationError extends Error {
-  readonly code = "DATABASE_URL_MISSING";
+export type DatabaseConfigurationErrorCode =
+  | "DATABASE_URL_MISSING"
+  | "DATABASE_URL_INVALID";
 
-  constructor(message: string) {
+export class DatabaseConfigurationError extends Error {
+  constructor(
+    message: string,
+    public readonly code: DatabaseConfigurationErrorCode =
+      "DATABASE_URL_MISSING",
+  ) {
     super(message);
     this.name = "DatabaseConfigurationError";
   }
@@ -21,6 +27,25 @@ export function resolveDatabaseUrl(
 
   if (!value) {
     throw new DatabaseConfigurationError("DATABASE_URL is required");
+  }
+
+  try {
+    const url = new URL(value);
+    const databaseName = decodeURIComponent(
+      url.pathname.split("/").filter(Boolean).at(-1) ?? "",
+    );
+
+    if (
+      !["postgres:", "postgresql:"].includes(url.protocol) ||
+      !databaseName
+    ) {
+      throw new Error("invalid PostgreSQL URL");
+    }
+  } catch {
+    throw new DatabaseConfigurationError(
+      "DATABASE_URL must be a valid PostgreSQL URL",
+      "DATABASE_URL_INVALID",
+    );
   }
 
   return value;

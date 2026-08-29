@@ -125,4 +125,34 @@ describeDatabase("PostgreSQL schema", () => {
       `),
     ).rejects.toMatchObject({ constraint: "seat_observations_counts_check" });
   });
+
+  test("prevents deleting the ingestion referenced by a department head", async () => {
+    const headIngestionId = "00000000-0000-4000-8000-000000000002";
+    await connection.pool.query(`
+      insert into department_ingestions (
+        id, semester_code, department_code, collected_at, source_url,
+        status, summary, warnings, snapshot
+      ) values (
+        '${headIngestionId}', '202608', 'CMSC',
+        '2026-08-29T12:05:00Z', 'https://example.test',
+        'complete', '{}', '[]', '{}'
+      )
+    `);
+    await connection.pool.query(`
+      insert into department_ingestion_heads (
+        semester_code, department_code, latest_ingestion_id,
+        latest_collected_at
+      ) values (
+        '202608', 'CMSC', '${headIngestionId}', '2026-08-29T12:05:00Z'
+      )
+    `);
+
+    await expect(
+      connection.pool.query(
+        `delete from department_ingestions where id = '${headIngestionId}'`,
+      ),
+    ).rejects.toMatchObject({
+      constraint: "department_ingestion_heads_latest_fk",
+    });
+  });
 });

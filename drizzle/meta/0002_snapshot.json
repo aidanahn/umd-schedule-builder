@@ -1,0 +1,1297 @@
+{
+  "id": "07f49571-7caa-4140-8429-c9e928c35fca",
+  "prevId": "2c32006b-ddf6-462d-82b5-cb01f434947f",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.course_requirements": {
+      "name": "course_requirements",
+      "schema": "",
+      "columns": {
+        "semester_code": {
+          "name": "semester_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "course_id": {
+          "name": "course_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "course_requirements_course_fk": {
+          "name": "course_requirements_course_fk",
+          "tableFrom": "course_requirements",
+          "tableTo": "courses",
+          "columnsFrom": [
+            "semester_code",
+            "course_id"
+          ],
+          "columnsTo": [
+            "semester_code",
+            "course_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "course_requirements_pk": {
+          "name": "course_requirements_pk",
+          "columns": [
+            "semester_code",
+            "course_id",
+            "position"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "course_requirements_position_check": {
+          "name": "course_requirements_position_check",
+          "value": "\"course_requirements\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.courses": {
+      "name": "courses",
+      "schema": "",
+      "columns": {
+        "semester_code": {
+          "name": "semester_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "course_id": {
+          "name": "course_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_code": {
+          "name": "department_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credits_min": {
+          "name": "credits_min",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credits_max": {
+          "name": "credits_max",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grading_methods": {
+          "name": "grading_methods",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gen_ed_codes": {
+          "name": "gen_ed_codes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "last_seen_ingestion_id": {
+          "name": "last_seen_ingestion_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "courses_active_department_idx": {
+          "name": "courses_active_department_idx",
+          "columns": [
+            {
+              "expression": "semester_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "department_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "courses_course_id_idx": {
+          "name": "courses_course_id_idx",
+          "columns": [
+            {
+              "expression": "course_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "courses_semester_code_semesters_code_fk": {
+          "name": "courses_semester_code_semesters_code_fk",
+          "tableFrom": "courses",
+          "tableTo": "semesters",
+          "columnsFrom": [
+            "semester_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "courses_department_code_departments_code_fk": {
+          "name": "courses_department_code_departments_code_fk",
+          "tableFrom": "courses",
+          "tableTo": "departments",
+          "columnsFrom": [
+            "department_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "courses_last_seen_ingestion_id_department_ingestions_id_fk": {
+          "name": "courses_last_seen_ingestion_id_department_ingestions_id_fk",
+          "tableFrom": "courses",
+          "tableTo": "department_ingestions",
+          "columnsFrom": [
+            "last_seen_ingestion_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "courses_pk": {
+          "name": "courses_pk",
+          "columns": [
+            "semester_code",
+            "course_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "courses_credit_order_check": {
+          "name": "courses_credit_order_check",
+          "value": "\"courses\".\"credits_min\" >= 0 and \"courses\".\"credits_max\" >= \"courses\".\"credits_min\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.department_ingestion_heads": {
+      "name": "department_ingestion_heads",
+      "schema": "",
+      "columns": {
+        "semester_code": {
+          "name": "semester_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_code": {
+          "name": "department_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "latest_ingestion_id": {
+          "name": "latest_ingestion_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "latest_collected_at": {
+          "name": "latest_collected_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "department_ingestion_heads_semester_code_semesters_code_fk": {
+          "name": "department_ingestion_heads_semester_code_semesters_code_fk",
+          "tableFrom": "department_ingestion_heads",
+          "tableTo": "semesters",
+          "columnsFrom": [
+            "semester_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "department_ingestion_heads_department_code_departments_code_fk": {
+          "name": "department_ingestion_heads_department_code_departments_code_fk",
+          "tableFrom": "department_ingestion_heads",
+          "tableTo": "departments",
+          "columnsFrom": [
+            "department_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "department_ingestion_heads_latest_fk": {
+          "name": "department_ingestion_heads_latest_fk",
+          "tableFrom": "department_ingestion_heads",
+          "tableTo": "department_ingestions",
+          "columnsFrom": [
+            "latest_ingestion_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "department_ingestion_heads_pk": {
+          "name": "department_ingestion_heads_pk",
+          "columns": [
+            "semester_code",
+            "department_code"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "department_ingestion_heads_latest_pair_check": {
+          "name": "department_ingestion_heads_latest_pair_check",
+          "value": "(\"department_ingestion_heads\".\"latest_ingestion_id\" is null) = (\"department_ingestion_heads\".\"latest_collected_at\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.department_ingestions": {
+      "name": "department_ingestions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "semester_code": {
+          "name": "semester_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_code": {
+          "name": "department_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "collected_at": {
+          "name": "collected_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "summary": {
+          "name": "summary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "warnings": {
+          "name": "warnings",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "department_ingestions_department_collected_idx": {
+          "name": "department_ingestions_department_collected_idx",
+          "columns": [
+            {
+              "expression": "semester_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "department_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "collected_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "department_ingestions_semester_code_semesters_code_fk": {
+          "name": "department_ingestions_semester_code_semesters_code_fk",
+          "tableFrom": "department_ingestions",
+          "tableTo": "semesters",
+          "columnsFrom": [
+            "semester_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "department_ingestions_department_code_departments_code_fk": {
+          "name": "department_ingestions_department_code_departments_code_fk",
+          "tableFrom": "department_ingestions",
+          "tableTo": "departments",
+          "columnsFrom": [
+            "department_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "department_ingestions_snapshot_key": {
+          "name": "department_ingestions_snapshot_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "semester_code",
+            "department_code",
+            "collected_at"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "department_ingestions_status_check": {
+          "name": "department_ingestions_status_check",
+          "value": "\"department_ingestions\".\"status\" = 'complete'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.departments": {
+      "name": "departments",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "departments_code_check": {
+          "name": "departments_code_check",
+          "value": "\"departments\".\"code\" ~ '^[A-Z]{4}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.seat_events": {
+      "name": "seat_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "semester_code": {
+          "name": "semester_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_code": {
+          "name": "department_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "course_id": {
+          "name": "course_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "section_number": {
+          "name": "section_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "previous_ingestion_id": {
+          "name": "previous_ingestion_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_ingestion_id": {
+          "name": "current_ingestion_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "previous_value": {
+          "name": "previous_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_value": {
+          "name": "current_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delta": {
+          "name": "delta",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "seat_events_section_created_idx": {
+          "name": "seat_events_section_created_idx",
+          "columns": [
+            {
+              "expression": "semester_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "section_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "seat_events_type_created_idx": {
+          "name": "seat_events_type_created_idx",
+          "columns": [
+            {
+              "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "seat_events_current_ingestion_idx": {
+          "name": "seat_events_current_ingestion_idx",
+          "columns": [
+            {
+              "expression": "current_ingestion_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "seat_events_semester_code_semesters_code_fk": {
+          "name": "seat_events_semester_code_semesters_code_fk",
+          "tableFrom": "seat_events",
+          "tableTo": "semesters",
+          "columnsFrom": [
+            "semester_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "seat_events_department_code_departments_code_fk": {
+          "name": "seat_events_department_code_departments_code_fk",
+          "tableFrom": "seat_events",
+          "tableTo": "departments",
+          "columnsFrom": [
+            "department_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "seat_events_previous_ingestion_id_department_ingestions_id_fk": {
+          "name": "seat_events_previous_ingestion_id_department_ingestions_id_fk",
+          "tableFrom": "seat_events",
+          "tableTo": "department_ingestions",
+          "columnsFrom": [
+            "previous_ingestion_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "seat_events_current_ingestion_id_department_ingestions_id_fk": {
+          "name": "seat_events_current_ingestion_id_department_ingestions_id_fk",
+          "tableFrom": "seat_events",
+          "tableTo": "department_ingestions",
+          "columnsFrom": [
+            "current_ingestion_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "seat_events_section_fk": {
+          "name": "seat_events_section_fk",
+          "tableFrom": "seat_events",
+          "tableTo": "sections",
+          "columnsFrom": [
+            "semester_code",
+            "section_id"
+          ],
+          "columnsTo": [
+            "semester_code",
+            "section_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "seat_events_course_fk": {
+          "name": "seat_events_course_fk",
+          "tableFrom": "seat_events",
+          "tableTo": "courses",
+          "columnsFrom": [
+            "semester_code",
+            "course_id"
+          ],
+          "columnsTo": [
+            "semester_code",
+            "course_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "seat_events_current_section_type_key": {
+          "name": "seat_events_current_section_type_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "current_ingestion_id",
+            "section_id",
+            "event_type"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "seat_events_type_check": {
+          "name": "seat_events_type_check",
+          "value": "\"seat_events\".\"event_type\" in ('SEATS_OPENED', 'SECTION_FILLED', 'OPEN_SEATS_CHANGED', 'TOTAL_SEATS_CHANGED', 'WAITLIST_CHANGED', 'HOLD_FILE_CHANGED', 'SECTION_ADDED', 'SECTION_REMOVED')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.seat_observations": {
+      "name": "seat_observations",
+      "schema": "",
+      "columns": {
+        "ingestion_id": {
+          "name": "ingestion_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "semester_code": {
+          "name": "semester_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "course_id": {
+          "name": "course_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_seats": {
+          "name": "total_seats",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "open_seats": {
+          "name": "open_seats",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "waitlist_count": {
+          "name": "waitlist_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hold_file_count": {
+          "name": "hold_file_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "seat_observations_section_history_idx": {
+          "name": "seat_observations_section_history_idx",
+          "columns": [
+            {
+              "expression": "semester_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "section_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ingestion_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "seat_observations_ingestion_id_department_ingestions_id_fk": {
+          "name": "seat_observations_ingestion_id_department_ingestions_id_fk",
+          "tableFrom": "seat_observations",
+          "tableTo": "department_ingestions",
+          "columnsFrom": [
+            "ingestion_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "seat_observations_section_fk": {
+          "name": "seat_observations_section_fk",
+          "tableFrom": "seat_observations",
+          "tableTo": "sections",
+          "columnsFrom": [
+            "semester_code",
+            "section_id"
+          ],
+          "columnsTo": [
+            "semester_code",
+            "section_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "seat_observations_course_fk": {
+          "name": "seat_observations_course_fk",
+          "tableFrom": "seat_observations",
+          "tableTo": "courses",
+          "columnsFrom": [
+            "semester_code",
+            "course_id"
+          ],
+          "columnsTo": [
+            "semester_code",
+            "course_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "seat_observations_pk": {
+          "name": "seat_observations_pk",
+          "columns": [
+            "ingestion_id",
+            "semester_code",
+            "section_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "seat_observations_counts_check": {
+          "name": "seat_observations_counts_check",
+          "value": "\"seat_observations\".\"total_seats\" >= 0 and \"seat_observations\".\"open_seats\" >= 0 and (\"seat_observations\".\"waitlist_count\" is null or \"seat_observations\".\"waitlist_count\" >= 0) and (\"seat_observations\".\"hold_file_count\" is null or \"seat_observations\".\"hold_file_count\" >= 0)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.section_instructors": {
+      "name": "section_instructors",
+      "schema": "",
+      "columns": {
+        "semester_code": {
+          "name": "semester_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "section_instructors_section_fk": {
+          "name": "section_instructors_section_fk",
+          "tableFrom": "section_instructors",
+          "tableTo": "sections",
+          "columnsFrom": [
+            "semester_code",
+            "section_id"
+          ],
+          "columnsTo": [
+            "semester_code",
+            "section_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "section_instructors_pk": {
+          "name": "section_instructors_pk",
+          "columns": [
+            "semester_code",
+            "section_id",
+            "position"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "section_instructors_position_check": {
+          "name": "section_instructors_position_check",
+          "value": "\"section_instructors\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.section_meetings": {
+      "name": "section_meetings",
+      "schema": "",
+      "columns": {
+        "semester_code": {
+          "name": "semester_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "days": {
+          "name": "days",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_minutes": {
+          "name": "start_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "end_minutes": {
+          "name": "end_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_time": {
+          "name": "display_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "building": {
+          "name": "building",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "room": {
+          "name": "room",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meeting_type": {
+          "name": "meeting_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "section_meetings_section_fk": {
+          "name": "section_meetings_section_fk",
+          "tableFrom": "section_meetings",
+          "tableTo": "sections",
+          "columnsFrom": [
+            "semester_code",
+            "section_id"
+          ],
+          "columnsTo": [
+            "semester_code",
+            "section_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "section_meetings_pk": {
+          "name": "section_meetings_pk",
+          "columns": [
+            "semester_code",
+            "section_id",
+            "position"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "section_meetings_position_check": {
+          "name": "section_meetings_position_check",
+          "value": "\"section_meetings\".\"position\" >= 0"
+        },
+        "section_meetings_time_pair_check": {
+          "name": "section_meetings_time_pair_check",
+          "value": "(\"section_meetings\".\"start_minutes\" is null) = (\"section_meetings\".\"end_minutes\" is null)"
+        },
+        "section_meetings_time_range_check": {
+          "name": "section_meetings_time_range_check",
+          "value": "\"section_meetings\".\"start_minutes\" between 0 and 1439 and \"section_meetings\".\"end_minutes\" between \"section_meetings\".\"start_minutes\" and 1439"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sections": {
+      "name": "sections",
+      "schema": "",
+      "columns": {
+        "semester_code": {
+          "name": "semester_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "course_id": {
+          "name": "course_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "section_number": {
+          "name": "section_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delivery_mode": {
+          "name": "delivery_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "last_seen_ingestion_id": {
+          "name": "last_seen_ingestion_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "sections_active_course_idx": {
+          "name": "sections_active_course_idx",
+          "columns": [
+            {
+              "expression": "semester_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "course_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sections_section_id_idx": {
+          "name": "sections_section_id_idx",
+          "columns": [
+            {
+              "expression": "section_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sections_last_seen_ingestion_id_department_ingestions_id_fk": {
+          "name": "sections_last_seen_ingestion_id_department_ingestions_id_fk",
+          "tableFrom": "sections",
+          "tableTo": "department_ingestions",
+          "columnsFrom": [
+            "last_seen_ingestion_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sections_course_fk": {
+          "name": "sections_course_fk",
+          "tableFrom": "sections",
+          "tableTo": "courses",
+          "columnsFrom": [
+            "semester_code",
+            "course_id"
+          ],
+          "columnsTo": [
+            "semester_code",
+            "course_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "sections_pk": {
+          "name": "sections_pk",
+          "columns": [
+            "semester_code",
+            "section_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "sections_delivery_mode_check": {
+          "name": "sections_delivery_mode_check",
+          "value": "\"sections\".\"delivery_mode\" in ('face-to-face', 'blended', 'online', 'unknown')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.semesters": {
+      "name": "semesters",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "semesters_code_check": {
+          "name": "semesters_code_check",
+          "value": "\"semesters\".\"code\" ~ '^[0-9]{6}$'"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

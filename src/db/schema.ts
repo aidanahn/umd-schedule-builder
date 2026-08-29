@@ -91,10 +91,7 @@ export const departmentIngestionHeads = pgTable(
     departmentCode: text("department_code")
       .notNull()
       .references(() => departments.code),
-    latestIngestionId: uuid("latest_ingestion_id").references(
-      () => departmentIngestions.id,
-      { onDelete: "set null" },
-    ),
+    latestIngestionId: uuid("latest_ingestion_id"),
     latestCollectedAt: timestamp("latest_collected_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -104,6 +101,11 @@ export const departmentIngestionHeads = pgTable(
     primaryKey({
       name: "department_ingestion_heads_pk",
       columns: [table.semesterCode, table.departmentCode],
+    }),
+    foreignKey({
+      name: "department_ingestion_heads_latest_fk",
+      columns: [table.latestIngestionId],
+      foreignColumns: [departmentIngestions.id],
     }),
     check(
       "department_ingestion_heads_latest_pair_check",

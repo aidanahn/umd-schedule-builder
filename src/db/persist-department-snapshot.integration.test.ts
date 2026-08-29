@@ -216,6 +216,45 @@ describeDatabase("persistDepartmentSnapshot", () => {
     ]);
   });
 
+  test("serializes concurrent retries for the same department snapshot", async () => {
+    const snapshot = baselineSnapshot();
+    const results = await Promise.all([
+      persistDepartmentSnapshot(connection.db, snapshot, {
+        createId: () => firstIngestionId,
+      }),
+      persistDepartmentSnapshot(connection.db, snapshot, {
+        createId: () => secondIngestionId,
+      }),
+    ]);
+
+    const inserted = results.find(({ alreadyPersisted }) => !alreadyPersisted);
+    const retried = results.find(({ alreadyPersisted }) => alreadyPersisted);
+
+    expect(inserted).toMatchObject({
+      previousIngestionId: null,
+      alreadyPersisted: false,
+      observationsInserted: 2,
+      eventsInserted: 0,
+    });
+    expect(retried).toEqual({
+      ingestionId: inserted?.ingestionId,
+      previousIngestionId: null,
+      alreadyPersisted: true,
+      observationsInserted: 0,
+      eventsInserted: 0,
+    });
+
+    const counts = await connection.pool.query<{
+      ingestions: number;
+      observations: number;
+    }>(`
+      select
+        (select count(*)::int from department_ingestions) as ingestions,
+        (select count(*)::int from seat_observations) as observations
+    `);
+    expect(counts.rows[0]).toEqual({ ingestions: 1, observations: 2 });
+  });
+
   test("reconciles current data and records objective events with provenance", async () => {
     const createId = idSequence(
       firstIngestionId,

@@ -1,0 +1,3 @@
+ALTER TABLE "department_ingestion_heads" DROP CONSTRAINT "department_ingestion_heads_latest_ingestion_id_department_ingestions_id_fk";
+--> statement-breakpoint
+ALTER TABLE "department_ingestion_heads" ADD CONSTRAINT "department_ingestion_heads_latest_ingestion_id_department_ingestions_id_fk" FOREIGN KEY ("latest_ingestion_id") REFERENCES "public"."department_ingestions"("id") ON DELETE no action ON UPDATE no action;

@@ -8,6 +8,20 @@
       "when": 1787987297062,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788037176317,
+      "tag": "0001_restrict-ingestion-deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788037216837,
+      "tag": "0002_name-head-foreign-key",
+      "breakpoints": true
     }
   ]
 }

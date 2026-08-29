@@ -25,6 +25,26 @@ describe("resolveDatabaseUrl", () => {
       resolveDatabaseUrl({ DATABASE_URL: "postgresql://localhost/app" }),
     ).toBe("postgresql://localhost/app");
   });
+
+  test.each(["not a URL", "https://localhost/app", "postgresql://localhost"])(
+    "rejects invalid PostgreSQL URL %s without exposing it",
+    (value) => {
+      let thrown: unknown;
+
+      try {
+        resolveDatabaseUrl({ DATABASE_URL: value });
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toMatchObject({
+        name: "DatabaseConfigurationError",
+        code: "DATABASE_URL_INVALID",
+        message: "DATABASE_URL must be a valid PostgreSQL URL",
+      });
+      expect(String(thrown)).not.toContain(value);
+    },
+  );
 });
 
 describe("createDatabaseConnection", () => {

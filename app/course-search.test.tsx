@@ -11,6 +11,7 @@ describe("CourseSearch", () => {
     expect($("h1").text()).toBe("UMD Course Search");
     expect($("label[for='semester']").text()).toBe("Semester");
     expect($("select#semester").val()).toBe("202608");
+    expect($("select#semester option:selected").text()).toBe("Fall 2026");
     expect($("select#semester").is("[disabled]")).toBe(true);
     expect($("label[for='department']").text()).toBe("Department");
     expect($("input#department").attr("value")).toBe("CMSC");

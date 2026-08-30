@@ -8,6 +8,7 @@ describe("CourseSearch", () => {
   test("renders fixed catalog context and a disabled search action", () => {
     const $ = load(renderToStaticMarkup(<CourseSearch />));
 
+    expect($.root().text()).not.toContain("UMD Schedule Builder");
     expect($("h1").text()).toBe("UMD Course Search");
     expect($("label[for='semester']").text()).toBe("Semester");
     expect($("select#semester").val()).toBe("202608");

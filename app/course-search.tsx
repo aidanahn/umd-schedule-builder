@@ -3,9 +3,6 @@ export function CourseSearch() {
     <main className="min-h-screen bg-slate-50 px-4 py-12 text-slate-950 sm:px-6">
       <div className="mx-auto max-w-4xl">
         <header className="mb-8">
-          <p className="mb-2 text-sm font-medium text-red-700">
-            UMD Schedule Builder
-          </p>
           <h1 className="text-3xl font-semibold tracking-tight">
             UMD Course Search
           </h1>

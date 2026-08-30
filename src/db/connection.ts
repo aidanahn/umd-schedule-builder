@@ -20,10 +20,16 @@ export class DatabaseConfigurationError extends Error {
   }
 }
 
+type DatabaseEnvironment = {
+  DATABASE_URL?: string;
+};
+
 export function resolveDatabaseUrl(
-  env: NodeJS.ProcessEnv = process.env,
+  env?: DatabaseEnvironment,
 ): string {
-  const value = env.DATABASE_URL?.trim();
+  const value = (
+    env === undefined ? process.env.DATABASE_URL : env.DATABASE_URL
+  )?.trim();
 
   if (!value) {
     throw new DatabaseConfigurationError("DATABASE_URL is required");

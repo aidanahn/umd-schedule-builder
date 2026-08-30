@@ -3,6 +3,8 @@ node_modules/
 coverage/
 dist/
 *.tsbuildinfo
+.next/
+out/
 data/snapshots/
 .env
 .env.*

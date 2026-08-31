@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ilike, or } from "drizzle-orm";
 
 import type { AppDatabase } from "./connection.js";
 import { courses } from "./schema.js";
@@ -6,6 +6,7 @@ import { courses } from "./schema.js";
 export interface ListCoursesScope {
   semester: string;
   department: string;
+  query?: string;
 }
 
 export interface CourseListItem {
@@ -24,6 +25,11 @@ export async function listCourses(
   db: AppDatabase,
   scope: ListCoursesScope,
 ): Promise<CourseListItem[]> {
+  const query = scope.query?.trim();
+  const searchPattern = query
+    ? `%${query.replace(/[\\%_]/g, "\\$&")}%`
+    : undefined;
+
   const rows = await db
     .select({
       id: courses.courseId,
@@ -40,6 +46,12 @@ export async function listCourses(
         eq(courses.semesterCode, scope.semester),
         eq(courses.departmentCode, scope.department),
         eq(courses.isActive, true),
+        searchPattern
+          ? or(
+              ilike(courses.courseId, searchPattern),
+              ilike(courses.title, searchPattern),
+            )
+          : undefined,
       ),
     )
     .orderBy(asc(courses.courseId));

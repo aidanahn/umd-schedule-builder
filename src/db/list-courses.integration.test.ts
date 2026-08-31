@@ -97,4 +97,72 @@ describeDatabase("listCourses", () => {
       },
     ]);
   });
+
+  test("matches a trimmed course ID without regard to case", async () => {
+    const results = await listCourses(connection.db, {
+      semester: "202608",
+      department: "CMSC",
+      query: "  cmsc216  ",
+    });
+
+    expect(results.map(({ id }) => id)).toEqual(["CMSC216"]);
+  });
+
+  test("matches a title substring without regard to case", async () => {
+    const results = await listCourses(connection.db, {
+      semester: "202608",
+      department: "CMSC",
+      query: "OBJECT-oriented",
+    });
+
+    expect(results.map(({ id }) => id)).toEqual(["CMSC131"]);
+  });
+
+  test("treats a blank query as an unfiltered course listing", async () => {
+    const results = await listCourses(connection.db, {
+      semester: "202608",
+      department: "CMSC",
+      query: "   ",
+    });
+
+    expect(results.map(({ id }) => id)).toEqual(["CMSC131", "CMSC216"]);
+  });
+
+  test("treats SQL wildcard characters as literal search text", async () => {
+    await connection.pool.query(`
+      insert into courses (
+        semester_code,
+        course_id,
+        department_code,
+        title,
+        credits_min,
+        credits_max,
+        grading_methods,
+        gen_ed_codes,
+        description,
+        is_active,
+        last_seen_ingestion_id
+      ) values (
+        '202608',
+        'CMSC389A',
+        'CMSC',
+        'Topics: 100% Reliable Systems',
+        3,
+        3,
+        array['Regular'],
+        array[]::text[],
+        null,
+        true,
+        '00000000-0000-4000-8000-000000000001'
+      )
+    `);
+
+    const results = await listCourses(connection.db, {
+      semester: "202608",
+      department: "CMSC",
+      query: "%",
+    });
+
+    expect(results.map(({ id }) => id)).toEqual(["CMSC389A"]);
+  });
 });

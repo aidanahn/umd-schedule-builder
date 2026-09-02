@@ -1,5 +1,13 @@
-import { CourseSearch } from "./course-search";
+import { CourseSearchPage } from "./course-search-page";
 
-export default function Page() {
-  return <CourseSearch />;
+export interface HomePageProps {
+  searchParams: Promise<{
+    query?: string | string[];
+  }>;
+}
+
+export default async function Page({
+  searchParams,
+}: HomePageProps) {
+  return CourseSearchPage({ searchParams });
 }

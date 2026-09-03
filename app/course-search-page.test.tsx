@@ -32,9 +32,11 @@ describe("CourseSearchPage", () => {
     let receivedQuery: string | undefined;
     const page = await CourseSearchPage({
       searchParams: Promise.resolve({ query: "  CMSC216  " }),
-      search: async (query) => {
+      listDepartments: async () => ["CMSC", "MATH"],
+      search: async (query, department) => {
         receivedQuery = query;
-        return [sampleCourse];
+        expect(department).toBeUndefined();
+        return { courses: [sampleCourse], truncated: false };
       },
     });
     const $ = load(renderToStaticMarkup(page));
@@ -50,6 +52,7 @@ describe("CourseSearchPage", () => {
   test("does not search for a blank query", async () => {
     const page = await CourseSearchPage({
       searchParams: Promise.resolve({ query: "   " }),
+      listDepartments: async () => ["CMSC", "MATH"],
       search: async () => {
         throw new Error("blank queries must not reach the database");
       },
@@ -65,7 +68,8 @@ describe("CourseSearchPage", () => {
   test("renders an empty result state", async () => {
     const page = await CourseSearchPage({
       searchParams: Promise.resolve({ query: "CMSC999" }),
-      search: async () => [],
+      listDepartments: async () => ["CMSC", "MATH"],
+      search: async () => ({ courses: [], truncated: false }),
     });
     const $ = load(renderToStaticMarkup(page));
 
@@ -76,6 +80,7 @@ describe("CourseSearchPage", () => {
   test("renders a safe database error state", async () => {
     const page = await CourseSearchPage({
       searchParams: Promise.resolve({ query: "CMSC216" }),
+      listDepartments: async () => ["CMSC", "MATH"],
       search: async () => {
         throw new Error("password=do-not-expose");
       },
@@ -87,5 +92,46 @@ describe("CourseSearchPage", () => {
     );
     expect($.root().text()).not.toContain("do-not-expose");
     expect($("[aria-label='Course search results']")).toHaveLength(0);
+  });
+
+  test("normalizes and applies an available department filter", async () => {
+    let receivedDepartment: string | undefined;
+    const page = await CourseSearchPage({
+      searchParams: Promise.resolve({ query: "calculus", department: "math" }),
+      listDepartments: async () => ["CMSC", "MATH"],
+      search: async (_query, department) => {
+        receivedDepartment = department;
+        return { courses: [sampleCourse], truncated: false };
+      },
+    });
+    const $ = load(renderToStaticMarkup(page));
+
+    expect(receivedDepartment).toBe("MATH");
+    expect($("select#department").val()).toBe("MATH");
+  });
+
+  test("falls back to all departments for an unavailable filter", async () => {
+    let receivedDepartment = "not-called";
+    await CourseSearchPage({
+      searchParams: Promise.resolve({ query: "systems", department: "XXXX" }),
+      listDepartments: async () => ["CMSC", "MATH"],
+      search: async (_query, department) => {
+        receivedDepartment = department ?? "all";
+        return { courses: [], truncated: false };
+      },
+    });
+    expect(receivedDepartment).toBe("all");
+  });
+
+  test("renders the bounded-result status honestly", async () => {
+    const page = await CourseSearchPage({
+      searchParams: Promise.resolve({ query: "a" }),
+      listDepartments: async () => ["CMSC"],
+      search: async () => ({ courses: [sampleCourse], truncated: true }),
+    });
+    const $ = load(renderToStaticMarkup(page));
+    expect($("[role='status']").text()).toBe(
+      "Showing the first 50 matching courses. Refine your search.",
+    );
   });
 });

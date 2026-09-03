@@ -14,6 +14,7 @@ describe("parseIngestionWorkerArgs", () => {
         {},
       ),
     ).toEqual({
+      mode: "single",
       semester: "202608",
       department: "CMSC",
       intervalMs: 300_000,
@@ -28,6 +29,7 @@ describe("parseIngestionWorkerArgs", () => {
         INGEST_INTERVAL_SECONDS: "600",
       }),
     ).toEqual({
+      mode: "single",
       semester: "202608",
       department: "CMSC",
       intervalMs: 600_000,
@@ -52,10 +54,55 @@ describe("parseIngestionWorkerArgs", () => {
         },
       ),
     ).toEqual({
+      mode: "single",
       semester: "202608",
       department: "CMSC",
       intervalMs: 120_000,
     });
+  });
+
+  test("parses all-departments mode with independent delays", () => {
+    expect(
+      parseIngestionWorkerArgs(
+        [
+          "--semester",
+          "202608",
+          "--all-departments",
+          "--department-delay-seconds",
+          "0",
+        ],
+        {},
+      ),
+    ).toEqual({
+      mode: "all",
+      semester: "202608",
+      intervalMs: 300_000,
+      departmentDelayMs: 0,
+    });
+  });
+
+  test("rediscovers all departments when configured through the environment", () => {
+    expect(
+      parseIngestionWorkerArgs([], {
+        INGEST_SEMESTER: "202608",
+        INGEST_ALL_DEPARTMENTS: "true",
+        INGEST_DEPARTMENT_DELAY_SECONDS: "5",
+      }),
+    ).toEqual({
+      mode: "all",
+      semester: "202608",
+      intervalMs: 300_000,
+      departmentDelayMs: 5_000,
+    });
+  });
+
+  test("rejects a department combined with all-departments mode", () => {
+    expect(() =>
+      parseIngestionWorkerArgs(
+        ["--semester", "202608", "--all-departments"],
+        { INGEST_DEPARTMENT: "CMSC" },
+      ),
+    ).toThrow("all-departments mode cannot be combined with a department");
   });
 
   test.each([
@@ -140,6 +187,41 @@ describe("runIngestionWorkerCommand", () => {
     expect(runDatabaseIngestion).toHaveBeenCalledWith(
       ["--semester", "202608", "--department", "CMSC"],
       { stdout, stderr },
+    );
+  });
+
+  test("runs every all-departments cycle through fresh discovery", async () => {
+    const signal = new AbortController().signal;
+    const runAllDepartmentIngestion = vi.fn().mockResolvedValue(0);
+    const runAllWorker = vi.fn(async (config, dependencies) => {
+      expect(config).toEqual({
+        semester: "202608",
+        intervalMs: 300_000,
+        departmentDelayMs: 5_000,
+        signal,
+      });
+      await dependencies.runCycle({
+        semester: "202608",
+        departmentDelayMs: 5_000,
+        signal,
+      });
+    });
+
+    await expect(
+      runIngestionWorkerCommand(
+        ["--semester", "202608", "--all-departments"],
+        {
+          env: {},
+          signal,
+          runAllDepartmentIngestion,
+          runAllWorker,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(runAllDepartmentIngestion).toHaveBeenCalledWith(
+      ["--semester", "202608", "--department-delay-seconds", "5"],
+      expect.objectContaining({ signal }),
     );
   });
 

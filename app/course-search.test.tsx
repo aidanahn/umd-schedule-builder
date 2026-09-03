@@ -75,7 +75,12 @@ describe("CourseSearch", () => {
   test("renders a GET search form with the current query and status", () => {
     const $ = load(
       renderToStaticMarkup(
-        <CourseSearch query="CMSC216" status="1 course found." />,
+        <CourseSearch
+          department="MATH"
+          departmentCodes={["CMSC", "ENGL", "MATH"]}
+          query="CMSC216"
+          status="1 course found."
+        />,
       ),
     );
 
@@ -88,8 +93,13 @@ describe("CourseSearch", () => {
     expect($("select#semester option:selected").text()).toBe("Fall 2026");
     expect($("select#semester").is("[disabled]")).toBe(true);
     expect($("label[for='department']").text()).toBe("Department");
-    expect($("input#department").attr("value")).toBe("CMSC");
-    expect($("input#department").is("[readonly]")).toBe(true);
+    expect($("input#department")).toHaveLength(0);
+    expect($("select#department").val()).toBe("MATH");
+    expect(
+      $("select#department option")
+        .map((_index, option) => $(option).text())
+        .get(),
+    ).toEqual(["All departments", "CMSC", "ENGL", "MATH"]);
     expect($("label[for='course-query']").text()).toBe("Course");
     expect($("input#course-query[type='search']")).toHaveLength(1);
     expect($("input#course-query").attr("value")).toBe("CMSC216");

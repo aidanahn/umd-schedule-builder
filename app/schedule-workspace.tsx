@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { CourseListItem } from "../src/db/list-courses.js";
+import { buildCatalogSearchUrl } from "./catalog-search-url";
 import { CourseSearch } from "./course-search";
 import {
   clearStoredSchedule,
@@ -20,6 +21,8 @@ import {
 
 export interface ScheduleWorkspaceProps {
   courses?: CourseListItem[];
+  department?: string | undefined;
+  departmentCodes?: string[];
   query?: string;
   semester?: string;
   status?: string;
@@ -58,6 +61,8 @@ function MeetingList({ meetings }: Pick<ScheduleSection, "meetings">) {
 
 export function ScheduleWorkspace({
   courses = [],
+  department,
+  departmentCodes = [],
   query = "",
   semester = "202608",
   status = "Enter a course ID or title to search.",
@@ -66,6 +71,11 @@ export function ScheduleWorkspace({
   const [sections, setSections] = useState<ScheduleSection[]>([]);
   const [initialized, setInitialized] = useState(false);
   const skipInitialPersistence = useRef(true);
+  const currentQueryRef = useRef(query);
+
+  useEffect(() => {
+    currentQueryRef.current = query;
+  }, [query]);
 
   useEffect(() => {
     setSections(loadSchedule(window.localStorage));
@@ -111,13 +121,20 @@ export function ScheduleWorkspace({
   }
 
   function updateQuery(nextQuery: string) {
-    if (!nextQuery) {
-      router.replace("/", { scroll: false });
-      return;
-    }
+    currentQueryRef.current = nextQuery;
+    router.replace(buildCatalogSearchUrl({ query: nextQuery, department }), {
+      scroll: false,
+    });
+  }
 
-    const searchParams = new URLSearchParams({ query: nextQuery });
-    router.replace(`/?${searchParams.toString()}`, { scroll: false });
+  function updateDepartment(nextDepartment: string | undefined) {
+    router.replace(
+      buildCatalogSearchUrl({
+        query: currentQueryRef.current,
+        department: nextDepartment,
+      }),
+      { scroll: false },
+    );
   }
 
   const schedulePanel = (
@@ -196,8 +213,11 @@ export function ScheduleWorkspace({
   return (
     <CourseSearch
       courses={courses}
+      department={department}
+      departmentCodes={departmentCodes}
       onAddSection={addSection}
       onQueryChange={updateQuery}
+      onDepartmentChange={updateDepartment}
       query={query}
       scheduleInitialized={initialized}
       schedulePanel={schedulePanel}

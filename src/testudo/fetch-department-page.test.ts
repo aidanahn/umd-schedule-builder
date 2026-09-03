@@ -5,8 +5,32 @@ import {
   buildSectionsUrl,
   fetchDepartmentPage,
   fetchDepartmentSections,
+  fetchTestudoPage,
   TestudoFetchError,
 } from "./fetch-department-page.js";
+
+describe("fetchTestudoPage", () => {
+  it("uses the existing HTML request protections for an arbitrary Testudo page", async () => {
+    const html = "<html><body>catalog</body></html>";
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(html, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+    );
+
+    await expect(
+      fetchTestudoPage("https://app.testudo.umd.edu/soc/202608", {
+        fetchImpl,
+        now: () => new Date("2026-09-02T12:00:00Z"),
+      }),
+    ).resolves.toMatchObject({
+      html,
+      status: 200,
+      fetchedAt: "2026-09-02T12:00:00.000Z",
+    });
+  });
+});
 
 describe("buildDepartmentUrl", () => {
   it("builds the Testudo URL and normalizes the department", () => {

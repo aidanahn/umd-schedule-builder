@@ -3,6 +3,7 @@ import { CourseSearchPage } from "./course-search-page";
 export interface HomePageProps {
   searchParams: Promise<{
     query?: string | string[];
+    department?: string | string[];
   }>;
 }
 

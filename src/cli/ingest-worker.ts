@@ -3,21 +3,33 @@ import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
+import { runAllDepartmentsWorker } from "../worker/all-departments-worker.js";
 import { runIngestionWorker } from "../worker/ingestion-worker.js";
+import { runAllDepartmentIngestion } from "./ingest-all.js";
 import { runDatabaseIngestion } from "./ingest-db.js";
 import { parseScrapeArgs } from "./scrape.js";
 
-export type IngestionWorkerConfig = {
-  semester: string;
-  department: string;
-  intervalMs: number;
-};
+export type IngestionWorkerConfig =
+  | {
+      mode: "single";
+      semester: string;
+      department: string;
+      intervalMs: number;
+    }
+  | {
+      mode: "all";
+      semester: "202608";
+      intervalMs: number;
+      departmentDelayMs: number;
+    };
 
 export type IngestionWorkerEnvironment = {
   [key: string]: string | undefined;
   INGEST_SEMESTER?: string;
   INGEST_DEPARTMENT?: string;
   INGEST_INTERVAL_SECONDS?: string;
+  INGEST_ALL_DEPARTMENTS?: string;
+  INGEST_DEPARTMENT_DELAY_SECONDS?: string;
 };
 
 type ShutdownSignal = "SIGINT" | "SIGTERM";
@@ -31,7 +43,9 @@ export type IngestionWorkerCliOptions = {
   env?: IngestionWorkerEnvironment;
   signal: AbortSignal;
   runDatabaseIngestion?: typeof runDatabaseIngestion;
+  runAllDepartmentIngestion?: typeof runAllDepartmentIngestion;
   runWorker?: typeof runIngestionWorker;
+  runAllWorker?: typeof runAllDepartmentsWorker;
   stdout?: (message: string) => void;
   stderr?: (message: string) => void;
 };
@@ -46,6 +60,8 @@ export function parseIngestionWorkerArgs(
       semester: { type: "string" },
       department: { type: "string" },
       "interval-seconds": { type: "string" },
+      "all-departments": { type: "boolean" },
+      "department-delay-seconds": { type: "string" },
     },
     strict: true,
     allowPositionals: false,
@@ -55,11 +71,19 @@ export function parseIngestionWorkerArgs(
   const department = values.department ?? env.INGEST_DEPARTMENT;
   const interval =
     values["interval-seconds"] ?? env.INGEST_INTERVAL_SECONDS ?? "300";
+  const allValue =
+    values["all-departments"] ??
+    parseBoolean(env.INGEST_ALL_DEPARTMENTS);
 
   if (!semester) {
     throw new Error("--semester or INGEST_SEMESTER is required");
   }
-  if (!department) {
+  if (allValue && department) {
+    throw new Error(
+      "all-departments mode cannot be combined with a department",
+    );
+  }
+  if (!allValue && !department) {
     throw new Error("--department or INGEST_DEPARTMENT is required");
   }
   if (!/^\d+$/.test(interval)) {
@@ -75,17 +99,46 @@ export function parseIngestionWorkerArgs(
     );
   }
 
+  if (allValue) {
+    if (semester !== "202608") {
+      throw new Error("all-departments mode only supports semester 202608");
+    }
+    const departmentDelay =
+      values["department-delay-seconds"] ??
+      env.INGEST_DEPARTMENT_DELAY_SECONDS ??
+      "5";
+    if (
+      !/^\d+$/.test(departmentDelay) ||
+      !Number.isSafeInteger(Number(departmentDelay))
+    ) {
+      throw new Error("department delay must be a nonnegative whole number");
+    }
+    return {
+      mode: "all",
+      semester: "202608",
+      intervalMs: intervalSeconds * 1_000,
+      departmentDelayMs: Number(departmentDelay) * 1_000,
+    };
+  }
+
   const input = parseScrapeArgs([
     "--semester",
     semester,
     "--department",
-    department,
+    department!,
   ]);
 
   return {
+    mode: "single",
     ...input,
     intervalMs: intervalSeconds * 1_000,
   };
+}
+
+function parseBoolean(value: string | undefined): boolean {
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error("INGEST_ALL_DEPARTMENTS must be true or false");
 }
 
 export function registerIngestionWorkerShutdown(
@@ -117,26 +170,57 @@ export async function runIngestionWorkerCommand(
     return 2;
   }
 
-  const runOnce = options.runDatabaseIngestion ?? runDatabaseIngestion;
-
   try {
-    await (options.runWorker ?? runIngestionWorker)(
-      { ...config, signal: options.signal },
-      {
-        runIngestion: (input) =>
-          runOnce(
-            [
-              "--semester",
-              input.semester,
-              "--department",
-              input.department,
-            ],
-            { stdout, stderr },
-          ),
-        stdout,
-        stderr,
-      },
-    );
+    if (config.mode === "all") {
+      const runCycle =
+        options.runAllDepartmentIngestion ?? runAllDepartmentIngestion;
+      await (options.runAllWorker ?? runAllDepartmentsWorker)(
+        {
+          semester: config.semester,
+          intervalMs: config.intervalMs,
+          departmentDelayMs: config.departmentDelayMs,
+          signal: options.signal,
+        },
+        {
+          runCycle: (input) =>
+            runCycle(
+              [
+                "--semester",
+                input.semester,
+                "--department-delay-seconds",
+                String(input.departmentDelayMs / 1_000),
+              ],
+              { signal: input.signal, stdout, stderr },
+            ),
+          stdout,
+          stderr,
+        },
+      );
+    } else {
+      const runOnce = options.runDatabaseIngestion ?? runDatabaseIngestion;
+      await (options.runWorker ?? runIngestionWorker)(
+        {
+          semester: config.semester,
+          department: config.department,
+          intervalMs: config.intervalMs,
+          signal: options.signal,
+        },
+        {
+          runIngestion: (input) =>
+            runOnce(
+              [
+                "--semester",
+                input.semester,
+                "--department",
+                input.department,
+              ],
+              { stdout, stderr },
+            ),
+          stdout,
+          stderr,
+        },
+      );
+    }
     return 0;
   } catch {
     stderr("Ingestion worker failed");

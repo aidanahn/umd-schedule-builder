@@ -99,6 +99,18 @@ function renderWorkspace() {
   );
 }
 
+function renderFilteredWorkspace() {
+  return render(
+    <ScheduleWorkspace
+      courses={[course]}
+      department="MATH"
+      departmentCodes={["CMSC", "ENGL", "MATH"]}
+      query="calculus"
+      status="1 course found."
+    />,
+  );
+}
+
 beforeEach(() => {
   router.replace.mockReset();
   window.localStorage.clear();
@@ -139,6 +151,37 @@ describe("ScheduleWorkspace", () => {
       "/?query=CMSC+216%26",
       { scroll: false },
     );
+  });
+
+  test("preserves the department during live search and the typed query during filtering", async () => {
+    renderFilteredWorkspace();
+    await screen.findByText("No sections added yet.");
+
+    const searchbox = screen.getByRole("searchbox", { name: "Course" });
+    fireEvent.change(searchbox, { target: { value: "linear algebra" } });
+    expect(router.replace).toHaveBeenLastCalledWith(
+      "/?query=linear+algebra&department=MATH",
+      { scroll: false },
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Department" }), {
+      target: { value: "ENGL" },
+    });
+    expect(router.replace).toHaveBeenLastCalledWith(
+      "/?query=linear+algebra&department=ENGL",
+      { scroll: false },
+    );
+  });
+
+  test("removes only the department when selecting all departments", async () => {
+    renderFilteredWorkspace();
+    await screen.findByText("No sections added yet.");
+    fireEvent.change(screen.getByRole("combobox", { name: "Department" }), {
+      target: { value: "" },
+    });
+    expect(router.replace).toHaveBeenLastCalledWith("/?query=calculus", {
+      scroll: false,
+    });
   });
 
   test("clears catalog results when the search input becomes empty", async () => {

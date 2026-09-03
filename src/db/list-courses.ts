@@ -13,8 +13,9 @@ import {
 
 export interface ListCoursesScope {
   semester: string;
-  department: string;
+  department?: string | undefined;
   query?: string;
+  limit?: number;
 }
 
 export interface CourseListItem {
@@ -65,14 +66,21 @@ export async function listCourses(
   db: AppDatabase,
   scope: ListCoursesScope,
 ): Promise<CourseListItem[]> {
+  if (
+    scope.limit !== undefined &&
+    (!Number.isSafeInteger(scope.limit) || scope.limit <= 0)
+  ) {
+    throw new RangeError("limit must be a positive safe integer");
+  }
   const query = scope.query?.trim();
   const searchPattern = query
     ? `%${query.replace(/[\\%_]/g, "\\$&")}%`
     : undefined;
 
-  const courseRows = await db
+  const courseQuery = db
     .select({
       id: courses.courseId,
+      department: courses.departmentCode,
       title: courses.title,
       creditsMin: courses.creditsMin,
       creditsMax: courses.creditsMax,
@@ -84,7 +92,9 @@ export async function listCourses(
     .where(
       and(
         eq(courses.semesterCode, scope.semester),
-        eq(courses.departmentCode, scope.department),
+        scope.department
+          ? eq(courses.departmentCode, scope.department)
+          : undefined,
         eq(courses.isActive, true),
         searchPattern
           ? or(
@@ -95,6 +105,10 @@ export async function listCourses(
       ),
     )
     .orderBy(asc(courses.courseId));
+
+  const courseRows = scope.limit
+    ? await courseQuery.limit(scope.limit)
+    : await courseQuery;
 
   if (courseRows.length === 0) {
     return [];
@@ -137,16 +151,21 @@ export async function listCourses(
     )
     .orderBy(asc(sections.courseId), asc(sections.sectionNumber));
 
-  const [head] = await db
-    .select({ latestIngestionId: departmentIngestionHeads.latestIngestionId })
+  const departmentCodes = [
+    ...new Set(courseRows.map(({ department }) => department)),
+  ];
+  const heads = await db
+    .select({
+      department: departmentIngestionHeads.departmentCode,
+      latestIngestionId: departmentIngestionHeads.latestIngestionId,
+    })
     .from(departmentIngestionHeads)
     .where(
       and(
         eq(departmentIngestionHeads.semesterCode, scope.semester),
-        eq(departmentIngestionHeads.departmentCode, scope.department),
+        inArray(departmentIngestionHeads.departmentCode, departmentCodes),
       ),
-    )
-    .limit(1);
+    );
 
   const sectionIds = sectionRows.map(({ id }) => id);
   const instructorRows = sectionIds.length
@@ -193,8 +212,11 @@ export async function listCourses(
         )
     : [];
 
+  const latestIngestionIds = heads
+    .map(({ latestIngestionId }) => latestIngestionId)
+    .filter((id): id is string => id !== null);
   const observationRows =
-    sectionIds.length && head?.latestIngestionId
+    sectionIds.length && latestIngestionIds.length
       ? await db
           .select({
             sectionId: seatObservations.sectionId,
@@ -206,7 +228,7 @@ export async function listCourses(
           .from(seatObservations)
           .where(
             and(
-              eq(seatObservations.ingestionId, head.latestIngestionId),
+              inArray(seatObservations.ingestionId, latestIngestionIds),
               eq(seatObservations.semesterCode, scope.semester),
               inArray(seatObservations.sectionId, sectionIds),
             ),
@@ -252,13 +274,15 @@ export async function listCourses(
     sectionsByCourse.set(courseId, courseSections);
   }
 
-  return courseRows.map(({ creditsMin, creditsMax, ...course }) => ({
-    ...course,
-    credits: {
-      min: creditsMin,
-      max: creditsMax,
-    },
-    requirements: requirementsByCourse.get(course.id) ?? [],
-    sections: sectionsByCourse.get(course.id) ?? [],
-  }));
+  return courseRows.map(
+    ({ creditsMin, creditsMax, department: _department, ...course }) => ({
+      ...course,
+      credits: {
+        min: creditsMin,
+        max: creditsMax,
+      },
+      requirements: requirementsByCourse.get(course.id) ?? [],
+      sections: sectionsByCourse.get(course.id) ?? [],
+    }),
+  );
 }

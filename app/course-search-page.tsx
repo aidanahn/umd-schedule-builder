@@ -1,16 +1,24 @@
-import type { CourseListItem } from "../src/db/list-courses";
 import { ScheduleWorkspace } from "./schedule-workspace";
-import { searchCourseCatalog } from "./search-course-catalog";
+import {
+  listCatalogDepartmentCodes,
+  searchCourseCatalog,
+  type CatalogSearchResult,
+} from "./search-course-catalog";
 
 type SearchParams = Promise<{
   query?: string | string[];
+  department?: string | string[];
 }>;
 
-type Search = (query: string) => Promise<CourseListItem[]>;
+type Search = (
+  query: string,
+  department: string | undefined,
+) => Promise<CatalogSearchResult>;
 
 export interface CourseSearchPageProps {
   searchParams: SearchParams;
   search?: Search;
+  listDepartments?: () => Promise<string[]>;
 }
 
 function resultStatus(count: number): string {
@@ -24,21 +32,43 @@ function resultStatus(count: number): string {
 export async function CourseSearchPage({
   searchParams,
   search = searchCourseCatalog,
+  listDepartments = listCatalogDepartmentCodes,
 }: CourseSearchPageProps) {
-  const queryParam = (await searchParams).query;
+  const params = await searchParams;
+  const queryParam = params.query;
   const query = typeof queryParam === "string" ? queryParam.trim() : "";
 
-  if (!query) {
-    return <ScheduleWorkspace />;
-  }
-
   try {
-    const courses = await search(query);
+    const departmentCodes = await listDepartments();
+    const requestedDepartment =
+      typeof params.department === "string"
+        ? params.department.trim().toUpperCase()
+        : "";
+    const department = departmentCodes.includes(requestedDepartment)
+      ? requestedDepartment
+      : undefined;
+
+    if (!query) {
+      return (
+        <ScheduleWorkspace
+          department={department}
+          departmentCodes={departmentCodes}
+        />
+      );
+    }
+
+    const result = await search(query, department);
     return (
       <ScheduleWorkspace
-        courses={courses}
+        courses={result.courses}
+        department={department}
+        departmentCodes={departmentCodes}
         query={query}
-        status={resultStatus(courses.length)}
+        status={
+          result.truncated
+            ? "Showing the first 50 matching courses. Refine your search."
+            : resultStatus(result.courses.length)
+        }
       />
     );
   } catch {

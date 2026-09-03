@@ -77,6 +77,11 @@ describeDatabase("listCourses", () => {
         'CMSC',
         '00000000-0000-4000-8000-000000000001',
         '2026-08-31T12:00:00Z'
+      ), (
+        '202608',
+        'MATH',
+        '00000000-0000-4000-8000-000000000002',
+        '2026-08-31T12:00:00Z'
       );
 
       insert into course_requirements (
@@ -223,6 +228,25 @@ describeDatabase("listCourses", () => {
     });
 
     expect(results.map(({ id }) => id)).toEqual(["CMSC216"]);
+  });
+
+  test("searches every active department when department is omitted", async () => {
+    const results = await listCourses(connection.db, {
+      semester: "202608",
+      query: "calculus",
+    });
+
+    expect(results.map(({ id }) => id)).toEqual(["MATH140"]);
+  });
+
+  test("limits global results deterministically", async () => {
+    const results = await listCourses(connection.db, {
+      semester: "202608",
+      query: "",
+      limit: 2,
+    });
+
+    expect(results.map(({ id }) => id)).toEqual(["CMSC131", "CMSC216"]);
   });
 
   test("matches a title substring without regard to case", async () => {

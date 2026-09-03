@@ -203,7 +203,7 @@ function positiveInteger(value: number, name: string): number {
   return value;
 }
 
-async function fetchTestudoPage(
+export async function fetchTestudoPage(
   url: string,
   options: FetchDepartmentPageOptions = {},
 ): Promise<FetchDepartmentPageResult> {

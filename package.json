@@ -16,6 +16,7 @@
     "db:up": "docker compose up -d --wait",
     "dev": "next dev",
     "ingest:db": "tsx src/cli/ingest-db.ts",
+    "ingest:all": "tsx src/cli/ingest-all.ts",
     "ingest:worker": "tsx src/cli/ingest-worker.ts",
     "scrape": "tsx src/cli/scrape.ts",
     "test": "vitest run --exclude '**/*.integration.test.ts'",
